@@ -132,8 +132,15 @@ public class PolicyDecisionService {
                 action = a;
             }
         }
-        // Engine safety failures cannot be weakened by an ALLOW/WARN policy.
-        if (residual || "BLOCK".equals(analysis.get("decision"))) {
+        // Engine safety failures (attack, unreviewable suspicion, residual data) cannot be weakened by
+        // any policy. Engine blocks caused only by policy-type findings - classification markings,
+        // bulk personal data - are left to the organisation's policy (e.g. REQUIRE_APPROVAL).
+        // An engine that does not report safety_block is treated conservatively: its BLOCK is final.
+        Object safetyFlag = analysis.get("safety_block");
+        boolean safetyBlock = safetyFlag == null
+                ? "BLOCK".equals(analysis.get("decision"))
+                : Boolean.TRUE.equals(safetyFlag);
+        if (residual || safetyBlock) {
             action = "BLOCK";
             policies.add(residual ? "Residual sensitive data after masking -> BLOCK"
                     : "Security engine safety decision -> BLOCK");

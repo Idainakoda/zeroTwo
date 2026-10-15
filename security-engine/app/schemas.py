@@ -76,6 +76,8 @@ class PromptAnalysis(BaseModel):
     sanitized_prompt: Optional[str] = None   # only when decision == SANITIZE
     masked_prompt: Optional[str] = None      # always: every redactable value replaced (None if masking is unsafe)
     residual_risk: bool = False              # sensitive data survived masking -> must not be forwarded
+    safety_block: bool = False               # BLOCK that no organisation policy may relax (attack, unreviewable
+                                             # suspicion, residual data); policy-type blocks leave this False
     system_prompt_addon: str = ""            # canary + safety rules to prepend to the LLM system prompt
     layer_scores: dict = {}                  # injection score per layer: rules, semantic, classifier, fused
     llm: LlmVerdict = LlmVerdict()

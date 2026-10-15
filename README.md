@@ -71,8 +71,10 @@ Then sign in as **Admin**:
 | 7. Dashboard | Admin overview, incidents, approvals, audit log |
 | Detection metrics (≥ 30 prompts) | 123-case development set + 60-case blind set, live in the Evaluation Lab or via `python -m evaluation.run` |
 
-**Latest measured results** (rules + ML layers, local model off):
-- **Development set:** 98.4 % detection accuracy, 100 % precision, 0 % false positives.
-- **Blind reworded attacks:** 25 / 30 blocked with 0 / 30 legitimate prompts blocked, up from 8 / 30 with rules alone.
+**Latest measured results** (rules + ML layers, local model off, after the data-protection hardening):
+- **Development set:** 99.2 % detection accuracy, 100 % recall, 98.7 % precision. 1 of 48 legitimate prompts is blocked: a classifier-only signal that would go to the local model if it were running.
+- **Blind reworded attacks:** 29 / 30 blocked, with 0 / 30 legitimate prompts blocked. Rules alone blocked 8 / 30; rules + ML layers alone blocked 25 / 30.
+- **Data protection** (spelled-out digits, Unicode tricks, split identifiers, quoted passwords): see [docs/03_DATA_PROTECTION.md](docs/03_DATA_PROTECTION.md) and `python -m evaluation.data_protection`.
+- **Without the local model**, borderline prompts fail closed unless the only signal is the ML classifier on code or on text whose secrets are masked. Classified content, private keys and bulk personal data are recommendations the backend's policy turns into **REQUIRE_APPROVAL**; attacks and data left visible after masking are always blocked.
 
 Engine delay is about 0.3 s (p50) on a laptop CPU. See the engine README for the honest caveats.

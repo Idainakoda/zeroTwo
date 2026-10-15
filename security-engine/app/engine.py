@@ -83,8 +83,37 @@ def _injection_layers(text: str, norm, inj) -> tuple[float, dict, list[Finding],
                              severity=4 if res.classifier >= 0.9 else 3, confidence=res.classifier,
                              detector="deberta-classifier", reason=f"classifier probability {res.classifier:.2f}"))
     layers = {"rules": inj.score, "semantic": res.semantic, "classifier": res.classifier if ml.classifier else None,
-              "nearest_attack_similarity": res.nearest_attack, "educational_framing": educational, "fused": fused}
+              "nearest_attack_similarity": res.nearest_attack, "educational_framing": educational,
+              "code_like": code, "fused": fused}
     return fused, layers, extra, _ms(t)
+
+
+def _still_suspicious_without_judge(masked_text: str, layers: dict, inj, norm) -> bool:
+    """With no local judge, decide whether a grey-zone prompt must fail closed.
+
+    The classifier alone (rules and semantic layer quiet) is not enough when:
+    - the text is code / config: it is known to misfire there, which is why its score is
+      already halved for code;
+    - the prompt contains values the gateway masks: the classifier reacts to key-like tokens
+      and to the <TYPE_n> placeholders themselves (a password prompt scores 0.03, its masked
+      copy 0.99), so on such prompts it measures the secret, not an attack.
+    Any rule or semantic signal, obfuscation or hidden characters still fail closed.
+    """
+    rules = layers.get("rules") or 0.0
+    semantic = layers.get("semantic") or 0.0
+    classifier_only = rules < config.INJECTION_GREY_LOW and semantic < config.INJECTION_GREY_LOW
+    has_masked_values = masked_text != norm.original
+    if (classifier_only and (layers.get("code_like") or has_masked_values)
+            and not inj.obfuscated and not norm.hidden_chars):
+        return False
+    if has_masked_values:
+        # Judge what would actually be forwarded, with neutral words instead of placeholder tags.
+        neutral = re.sub(r"<[A-Z_]+_\d+>", "value", masked_text)
+        masked_norm = normalize(neutral)
+        masked_score, _, _, _ = _injection_layers(neutral, masked_norm, injection.scan(masked_norm))
+        if masked_score < config.INJECTION_GREY_LOW:
+            return False
+    return True
 
 
 def _detect_data(text: str) -> list[Finding]:
@@ -185,11 +214,18 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
         decision = Decision.BLOCK
         reasons.append("Bulk export of personal data is not allowed")
 
+    # safety_block = a block no organisation policy may relax (injection, a confirmed attack,
+    # an unreviewable suspicious prompt, data left visible after masking). Blocks caused only by
+    # policy-type findings (classification markings, private keys, bulk personal data) are
+    # recommendations: the backend's policy may hold them for approval instead.
+    safety_block = inj_score >= config.INJECTION_BLOCK
+
     # ---- Local Llama: only when the fast layers are unsure ----
+    # Runs for policy-blocked prompts too, so a prompt later approved by a supervisor was still checked.
     llm = LlmVerdict()
     grey_injection = config.INJECTION_GREY_LOW <= inj_score < config.INJECTION_BLOCK
     business_hint = any(f.type == "BUSINESS_CONTEXT_HINT" for f in findings)
-    if decision != Decision.BLOCK and (grey_injection or business_hint or req.deep_scan):
+    if not safety_block and (grey_injection or business_hint or req.deep_scan):
         t = time.perf_counter()
         llm_input, _ = redact(text, findings)
         llm = await llm_analyzer.analyze(llm_input)
@@ -200,6 +236,7 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
                 all_findings.append(Finding(category=Category.INJECTION, type="LLM_CONFIRMED_INJECTION", severity=4,
                                             confidence=llm.risk or 0.8, detector="local-llama", reason=llm.reason))
                 decision = Decision.BLOCK
+                safety_block = True
                 reasons.append(f"Local model confirmed an injection attempt: {llm.reason}")
             if llm.confidential_context and (llm.risk or 0) >= 0.7:
                 all_findings.append(Finding(category=Category.CONFIDENTIAL, type="CONFIDENTIAL_BUSINESS_CONTEXT",
@@ -208,16 +245,19 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
                 decision = Decision.BLOCK
                 reasons.append(f"Local model found confidential business context: {llm.reason}")
         elif business_hint:
-            # A failed/disabled judge cannot silently clear possible internal data.
+            # A failed/disabled judge cannot silently clear possible internal data. This is a
+            # confidential-content finding, so the backend's CONFIDENTIAL policy (approval) applies.
             all_findings.append(Finding(category=Category.CONFIDENTIAL, type="CONFIDENTIAL_REVIEW_REQUIRED",
                                         severity=3, confidence=0.75, detector="local-review-required",
                                         reason="local confidential-content review is unavailable"))
             decision = Decision.BLOCK
-            reasons.append("Possible confidential business content needs local review; the judge is unavailable")
+            reasons.append("Possible confidential business content needs review; the local judge is unavailable")
         elif (grey_injection and not llm.available
               and not (is_educational(norm.views["clean"]) and inj_score < 0.5
-                       and not ml_findings and not inj.obfuscated and not norm.hidden_chars)):
+                       and not ml_findings and not inj.obfuscated and not norm.hidden_chars)
+              and _still_suspicious_without_judge(llm_input, layer_scores, inj, norm)):
             decision = Decision.BLOCK
+            safety_block = True
             reasons.append("Suspicious input needs local security review; the judge is unavailable")
         if decision != Decision.BLOCK and grey_injection:
             reasons.append(f"Suspicious wording (injection score {inj_score:.2f}); allowed with warning")
@@ -239,6 +279,7 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     timing.redact = _ms(t)
     if residual_risk or residual_inj:
         decision = Decision.BLOCK
+        safety_block = True
         reasons.append("Sensitive data or an injection remained after redaction; blocked as a precaution")
     elif decision == Decision.SANITIZE:
         sanitized = masked
@@ -259,7 +300,7 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
         request_id=request_id, decision=decision, risk_score=risk, injection_score=round(inj_score, 3),
         reasons=reasons, findings=all_findings, sanitized_prompt=sanitized, layer_scores=layer_scores,
         masked_prompt=masked if not (residual_risk or residual_inj) else None,
-        residual_risk=residual_risk or residual_inj,
+        residual_risk=residual_risk or residual_inj, safety_block=safety_block,
         system_prompt_addon=system_prompt_addon(canary),
         llm=llm, timing_ms=timing, audit=audit,
     )

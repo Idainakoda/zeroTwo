@@ -40,6 +40,35 @@ class PolicyDecisionServiceTests {
     }
 
     @Test
+    void safetyBlockCannotBeOverriddenByPolicy() {
+        assertEquals("BLOCK", service("ALLOW").decide(Map.of(
+                "decision", "BLOCK", "safety_block", true, "residual_risk", false, "findings", List.of())).action());
+    }
+
+    @Test
+    void classifiedContentBlockedByEngineGoesToApproval() {
+        assertEquals("REQUIRE_APPROVAL", service("MASK").decide(Map.of(
+                "decision", "BLOCK", "safety_block", false, "residual_risk", false, "findings", List.of(Map.of(
+                        "category", "CONFIDENTIAL", "type", "CLASSIFICATION_MARKING", "severity", 3,
+                        "redactable", false)))).action());
+    }
+
+    @Test
+    void bulkPersonalDataBlockedByEngineGoesToApproval() {
+        assertEquals("REQUIRE_APPROVAL", service("MASK").decide(Map.of(
+                "decision", "BLOCK", "safety_block", false, "residual_risk", false, "findings", List.of(
+                        Map.of("category", "PII", "type", "BULK_PERSONAL_DATA", "severity", 4, "redactable", false),
+                        Map.of("category", "PII", "type", "PHONE_IN", "severity", 3, "redactable", true)))).action());
+    }
+
+    @Test
+    void privateKeyStillBlocksEvenWithoutSafetyFlag() {
+        assertEquals("BLOCK", service("MASK").decide(Map.of(
+                "decision", "BLOCK", "safety_block", false, "residual_risk", false, "findings", List.of(Map.of(
+                        "category", "SECRET", "type", "PRIVATE_KEY", "severity", 4, "redactable", false)))).action());
+    }
+
+    @Test
     void ordinaryPersonalDataStillUsesMaskPolicy() {
         assertEquals("MASK", service("MASK").decide(Map.of(
                 "decision", "SANITIZE", "findings", List.of(Map.of(
