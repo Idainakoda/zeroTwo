@@ -6,83 +6,111 @@
   - Creates .env with a random JWT secret
 
   Run from the repository folder:   powershell -ExecutionPolicy Bypass -File .\setup.ps1
+
+  On a machine that runs only some services, set START_ENGINE / START_BACKEND / START_FRONTEND
+  in .env first (see docs/02_REMOTE_SETUP.md); setup then installs only what that machine needs.
 #>
+param([string]$EnvFile = "")
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
+if (-not $EnvFile) { $EnvFile = "$Root\.env" }
 . "$Root\scripts\common.ps1"
 
+if (-not (Test-Path $EnvFile)) {
+    Copy-Item "$Root\.env.example" $EnvFile
+}
+Import-DotEnv $EnvFile
+
+function Flag($name) {
+    $value = [Environment]::GetEnvironmentVariable($name, "Process")
+    return -not ($value -and $value.Trim().ToLower() -in @("false", "0", "no", "off"))
+}
+$needEngine = Flag "START_ENGINE"
+$needBackend = Flag "START_BACKEND"
+$needFrontend = Flag "START_FRONTEND"
+Write-Host "Installing for this machine: engine=$needEngine backend=$needBackend frontend=$needFrontend"
+
 Write-Step "Checking tools"
-$java = Find-Java
-if (-not $java) {
-    Write-Host "  Java 21 not found - downloading a portable Temurin JDK 21 into .\tools ..."
-    New-Item -ItemType Directory -Force "$Root\tools" | Out-Null
-    $zip = "$Root\tools\jdk.zip"
-    Invoke-WebRequest -UseBasicParsing "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $zip
-    Expand-Archive $zip -DestinationPath "$Root\tools" -Force
-    Remove-Item $zip
+$java = $null
+if ($needBackend) {
     $java = Find-Java
+    if (-not $java) {
+        Write-Host "  Java 21 not found - downloading a portable Temurin JDK 21 into .\tools ..."
+        New-Item -ItemType Directory -Force "$Root\tools" | Out-Null
+        $zip = "$Root\tools\jdk.zip"
+        Invoke-WebRequest -UseBasicParsing "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse" -OutFile $zip
+        Expand-Archive $zip -DestinationPath "$Root\tools" -Force
+        Remove-Item $zip
+        $java = Find-Java
+    }
+    Write-Host "  Java: $java"
 }
-Write-Host "  Java: $java"
 
-$node = Find-Node
-if (-not $node) {
-    Write-Host "  Node.js not found - downloading portable Node 22 LTS into .\tools ..."
-    New-Item -ItemType Directory -Force "$Root\tools" | Out-Null
-    $index = Invoke-RestMethod "https://nodejs.org/dist/index.json"
-    $ver = ($index | Where-Object { $_.version -like "v22.*" -and $_.lts } | Select-Object -First 1).version
-    $zip = "$Root\tools\node.zip"
-    Invoke-WebRequest -UseBasicParsing "https://nodejs.org/dist/$ver/node-$ver-win-x64.zip" -OutFile $zip
-    Expand-Archive $zip -DestinationPath "$Root\tools" -Force
-    Remove-Item $zip
+$node = $null
+if ($needFrontend) {
     $node = Find-Node
+    if (-not $node) {
+        Write-Host "  Node.js not found - downloading portable Node 22 LTS into .\tools ..."
+        New-Item -ItemType Directory -Force "$Root\tools" | Out-Null
+        $index = Invoke-RestMethod "https://nodejs.org/dist/index.json"
+        $ver = ($index | Where-Object { $_.version -like "v22.*" -and $_.lts } | Select-Object -First 1).version
+        $zip = "$Root\tools\node.zip"
+        Invoke-WebRequest -UseBasicParsing "https://nodejs.org/dist/$ver/node-$ver-win-x64.zip" -OutFile $zip
+        Expand-Archive $zip -DestinationPath "$Root\tools" -Force
+        Remove-Item $zip
+        $node = Find-Node
+    }
+    Write-Host "  Node: $node"
 }
-Write-Host "  Node: $node"
 
-$python = Find-Python
-if (-not $python) {
-    throw "Python 3.11 or 3.12 is required: install it from https://www.python.org (tick 'Add to PATH') and run setup again."
+if ($needEngine) {
+    $python = Find-Python
+    if (-not $python) {
+        throw "Python 3.11 or 3.12 is required: install it from https://www.python.org (tick 'Add to PATH') and run setup again."
+    }
+    Write-Host "  Python: $python"
+
+    Write-Step "Security engine (Python) - first run downloads about 2 GB"
+    $venvPython = "$Root\security-engine\.venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPython)) {
+        & $python -m venv "$Root\security-engine\.venv"
+    }
+    & $venvPython -m pip install --quiet --upgrade pip
+    & $venvPython -m pip install --quiet torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+    & $venvPython -m pip install --quiet -r "$Root\security-engine\requirements.txt"
+    & $venvPython -m spacy download en_core_web_sm --quiet
+    Write-Host "  Downloading the ML models (once)..."
+    & $venvPython -c "from sentence_transformers import SentenceTransformer; from transformers import pipeline; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); pipeline('text-classification', model='protectai/deberta-v3-base-prompt-injection-v2'); print('  models ready')"
 }
-Write-Host "  Python: $python"
 
-Write-Step "Security engine (Python) - first run downloads about 2 GB"
-$venvPython = "$Root\security-engine\.venv\Scripts\python.exe"
-if (-not (Test-Path $venvPython)) {
-    & $python -m venv "$Root\security-engine\.venv"
+if ($needFrontend) {
+    Write-Step "Frontend packages"
+    if (Test-Path "$Root\frontend\node_modules\vite") {
+        Write-Host "  Already installed"
+    } else {
+        Push-Location "$Root\frontend"
+        try {
+            & $node (Join-Path (Split-Path $node) "node_modules\npm\bin\npm-cli.js") ci --no-audit --no-fund
+        } finally {
+            Pop-Location
+        }
+    }
 }
-& $venvPython -m pip install --quiet --upgrade pip
-& $venvPython -m pip install --quiet torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
-& $venvPython -m pip install --quiet -r "$Root\security-engine\requirements.txt"
-& $venvPython -m spacy download en_core_web_sm --quiet
-Write-Host "  Downloading the ML models (once)..."
-& $venvPython -c "from sentence_transformers import SentenceTransformer; from transformers import pipeline; SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); pipeline('text-classification', model='protectai/deberta-v3-base-prompt-injection-v2'); print('  models ready')"
 
-Write-Step "Frontend packages"
-if (Test-Path "$Root\frontend\node_modules\vite") {
-    Write-Host "  Already installed"
-} else {
-    Push-Location "$Root\frontend"
+if ($needBackend) {
+    Write-Step "Backend (Maven downloads dependencies on first build)"
+    $env:JAVA_HOME = Split-Path (Split-Path $java)
+    Push-Location $Root
     try {
-        & $node (Join-Path (Split-Path $node) "node_modules\npm\bin\npm-cli.js") ci --no-audit --no-fund
+        & "$Root\mvnw.cmd" -q -DskipTests compile
     } finally {
         Pop-Location
     }
 }
 
-Write-Step "Backend (Maven downloads dependencies on first build)"
-$env:JAVA_HOME = Split-Path (Split-Path $java)
-Push-Location $Root
-try {
-    & "$Root\mvnw.cmd" -q -DskipTests compile
-} finally {
-    Pop-Location
-}
-
 Write-Step "Configuration (.env)"
-if (-not (Test-Path "$Root\.env")) {
-    Copy-Item "$Root\.env.example" "$Root\.env"
-}
-$envText = Get-Content "$Root\.env" -Raw
-if ($envText -notmatch "(?m)^JWT_SECRET=\S+") {
+$envText = Get-Content $EnvFile -Raw
+if ($needBackend -and $envText -notmatch "(?m)^JWT_SECRET=\S+") {
     $bytes = New-Object byte[] 32
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     $secret = [Convert]::ToBase64String($bytes)
@@ -91,11 +119,11 @@ if ($envText -notmatch "(?m)^JWT_SECRET=\S+") {
     } else {
         $envText = $envText.TrimEnd() + "`r`nJWT_SECRET=$secret`r`n"
     }
-    Set-Content "$Root\.env" $envText -Encoding ascii -NoNewline
+    Set-Content $EnvFile $envText -Encoding ascii -NoNewline
     Write-Host "  Generated a random JWT secret in .env"
 }
-if ($envText -notmatch "(?m)^GEMINI_API_KEY=\S+") {
+if ($needBackend -and $envText -notmatch "(?m)^GEMINI_API_KEY=\S+") {
     Write-Host "  Optional: paste your Gemini API key into .env (GEMINI_API_KEY=...) to get AI answers."
 }
 
-Write-Step "Done. Start everything with:  powershell -ExecutionPolicy Bypass -File .\start.ps1"
+Write-Step "Done. Start with:  powershell -ExecutionPolicy Bypass -File .\start.ps1"

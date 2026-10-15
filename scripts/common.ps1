@@ -53,6 +53,32 @@ function Import-DotEnv($path) {
     }
 }
 
+# This machine's address on the local network (the adapter that has a default gateway).
+function Get-LanAddress {
+    try {
+        $cfg = Get-NetIPConfiguration -ErrorAction Stop |
+            Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq "Up" } |
+            Select-Object -First 1
+        if ($cfg) { return $cfg.IPv4Address.IPAddress | Select-Object -First 1 }
+    } catch {
+        # fall through
+    }
+    return $null
+}
+
+# TCP reachability check for another device (host may be a name or an IP).
+function Test-Remote($hostName, $port, $timeoutMs = 3000) {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $task = $client.ConnectAsync($hostName, $port)
+        return ($task.Wait($timeoutMs) -and $client.Connected)
+    } catch {
+        return $false
+    } finally {
+        $client.Dispose()
+    }
+}
+
 function Wait-Port($port, $seconds) {
     $deadline = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $deadline) {

@@ -29,6 +29,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1    # every time: engine :80
 - **AI answers:** paste a Gemini key into `.env` (`GEMINI_API_KEY=...`, free at aistudio.google.com). Without a key, every security check still runs. Answers come from the local model if [Ollama](https://ollama.com) is running (`ollama pull llama3.2:3b`).
 - **Database:** the default `DB_PROFILE=local` uses a file database in `./data`, so nothing needs installing. For MySQL, set `DB_PROFILE=mysql` and `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` in `.env`.
 - **Fail-closed:** if the security engine is down, requests are blocked, never forwarded.
+- **Two laptops / shared MySQL:** to run the backend and MySQL on one laptop and the engine and frontend on another, follow [docs/02_REMOTE_SETUP.md](docs/02_REMOTE_SETUP.md). Every prompt is then recorded in that MySQL database in real time.
 
 ### Demo accounts (seeded locally; disable with `app.seed-demo=false`)
 
