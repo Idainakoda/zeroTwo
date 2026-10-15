@@ -1,0 +1,28 @@
+# Default recommendations produced by the security engine.
+# Spring Boot applies the organisation's own policy on top of these (per role / department).
+
+# Finding types that always lead to BLOCK, even though they could be redacted.
+block_types:
+  - PRIVATE_KEY
+  - CONNECTION_STRING
+  - CLASSIFICATION_MARKING
+
+# Redactable findings at or above this severity trigger SANITIZE (1 = low .. 4 = critical).
+# Severity-1 findings alone (a person's name, an IFSC code, source code) are allowed with a note.
+sanitize_min_severity: 2
+
+# Internal project codenames / unreleased scheme names that must never leave the organisation.
+codenames:
+  - Project Trishul
+  - Project Garuda
+  - Operation Sudarshan
+  - Scheme Navoday 2027
+
+# Response inspection: phrases that suggest the model is leaking its instructions.
+output_leak_phrases:
+  - "my system prompt"
+  - "here are my instructions"
+  - "here is my system prompt"
+  - "my hidden instructions"
+  - "i was instructed to never reveal"
+  - "my initial instructions"
