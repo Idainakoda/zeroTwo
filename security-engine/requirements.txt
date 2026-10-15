@@ -1,0 +1,13 @@
+fastapi==0.143.1
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+httpx==0.28.1
+PyYAML==6.0.3
+presidio-analyzer==2.2.364
+spacy==3.8.16
+pytest==9.1.1
+# ML injection layers (semantic similarity + classifier).
+# Install CPU-only torch first:  pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+sentence-transformers==6.1.0
+transformers==5.19.0
+# After installing:  python -m spacy download en_core_web_sm
