@@ -14,12 +14,14 @@ import PoliciesPage from "../pages/PoliciesPage";
 import UsersPage from "../pages/UsersPage";
 import EvaluationPage from "../pages/EvaluationPage";
 import PromptLogPage from "../pages/PromptLogPage";
+import LandingPage from "../pages/LandingPage";
+import GuidelinesPage from "../pages/GuidelinesPage";
 import { homeFor } from "../utils/routing";
 
 function RequireAuth({ children, roles }) {
   const { user, isAuthenticated } = useAuth();
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
   if (roles && !roles.some((r) => user?.roles?.includes(r))) {
     return <Navigate to={homeFor(user?.roles)} replace />;
@@ -37,14 +39,18 @@ const MONITOR = ["ADMIN", "SECURITY_ANALYST"];
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
-      <Route path="/register" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+      {/* First page: role-based entry (employee / administrator) */}
+      <Route path="/" element={<PublicOnly><LandingPage /></PublicOnly>} />
+      <Route path="/login/:portal" element={<PublicOnly><LoginPage /></PublicOnly>} />
+      <Route path="/register/:portal" element={<PublicOnly><RegisterPage /></PublicOnly>} />
+      <Route path="/login" element={<Navigate to="/login/employee" replace />} />
+      <Route path="/register" element={<Navigate to="/register/employee" replace />} />
 
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route path="/assistant" element={<ChatPage />} />
         <Route path="/activity" element={<MyActivityPage />} />
         <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/guidelines" element={<GuidelinesPage />} />
 
         <Route path="/admin" element={<RequireAuth roles={MONITOR}><AdminDashboardPage /></RequireAuth>} />
         <Route path="/admin/prompts" element={<RequireAuth roles={MONITOR}><PromptLogPage /></RequireAuth>} />
@@ -59,7 +65,7 @@ export default function AppRoutes() {
       {/* Old paths from the first version */}
       <Route path="/dashboard" element={<Navigate to="/assistant" replace />} />
       <Route path="/security" element={<Navigate to="/admin" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

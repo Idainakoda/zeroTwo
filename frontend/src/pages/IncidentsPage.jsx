@@ -16,7 +16,7 @@ function Select({ label, value, options, onChange }) {
     <label className="flex items-center gap-2 text-xs text-slate-400">
       {label}
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-300/40">
+        className="rounded-lg zt-input px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-400/40">
         {options.map((o) => <option key={o} value={o}>{o === "ALL" ? "All" : o.replace("_", " ").toLowerCase()}</option>)}
       </select>
     </label>
@@ -51,7 +51,7 @@ export default function IncidentsPage() {
           <Select label="Where" value={filter.direction} options={FILTERS.direction} onChange={(v) => setFilter({ ...filter, direction: v })} />
           <Select label="Severity" value={filter.severity} options={FILTERS.severity} onChange={(v) => setFilter({ ...filter, severity: v })} />
           <input value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.target.value })} placeholder="Search type or category"
-            className="min-w-[200px] flex-1 rounded-lg border border-white/10 bg-[#0a1120] px-3 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-300/40" />
+            className="min-w-[200px] flex-1 rounded-lg zt-input px-3 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400/40" />
           <span className="text-xs text-slate-500">{shown.length} of {incidents?.length || 0}</span>
         </div>
         {!incidents ? <LoadingSpinner /> : <IncidentTable incidents={shown} />}

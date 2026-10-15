@@ -13,8 +13,8 @@ import { UNAUTHORIZED_EVENT } from "../services/apiClient";
 
 const AuthContext = createContext(null);
 
-const TOKEN_KEY = "cybercup_token";
-const USER_KEY = "cybercup_user";
+const TOKEN_KEY = "zerotwo_token";
+const USER_KEY = "zerotwo_user";
 
 function readStoredUser() {
   try {

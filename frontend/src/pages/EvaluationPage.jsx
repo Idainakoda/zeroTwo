@@ -77,7 +77,7 @@ export default function EvaluationPage() {
       {m && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            <StatCard label="Test cases" value={m.total} detail={`${m.legitimate} legitimate · ${m.adversarial} adversarial`} tone="cyan" />
+            <StatCard label="Test cases" value={m.total} detail={`${m.legitimate} legitimate, ${m.adversarial} adversarial`} tone="indigo" />
             <StatCard label="Detection accuracy" value={pct(m.detection_accuracy)} tone="emerald" />
             <StatCard label="Precision" value={pct(m.precision)} tone="sky" />
             <StatCard label="Recall" value={pct(m.recall)} tone="violet" />
@@ -99,7 +99,7 @@ export default function EvaluationPage() {
                       <span className="tabular-nums text-slate-400">{s.correct}/{s.total}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
-                      <div className="h-full rounded-full bg-cyan-500" style={{ width: `${s.accuracy * 100}%` }} />
+                      <div className="h-full rounded-full bg-gradient-to-r from-signal to-iris" style={{ width: `${s.accuracy * 100}%` }} />
                     </div>
                   </li>
                 ))}
@@ -141,7 +141,7 @@ export default function EvaluationPage() {
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-3">
                         <div className="h-1.5 w-32 overflow-hidden rounded-full bg-white/5">
-                          <div className="h-full rounded-full bg-cyan-500" style={{ width: `${(row.attacks_blocked / blind.attacks) * 100}%` }} />
+                          <div className="h-full rounded-full bg-gradient-to-r from-signal to-iris" style={{ width: `${(row.attacks_blocked / blind.attacks) * 100}%` }} />
                         </div>
                         <span className="tabular-nums text-slate-300">{row.attacks_blocked}/{blind.attacks}</span>
                       </div>
@@ -155,7 +155,7 @@ export default function EvaluationPage() {
           </div>
           {blind.missed?.length > 0 && (
             <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Still missed</p>
+              <p className="text-xs font-medium text-mist">Still missed</p>
               <ul className="mt-2 space-y-1 text-xs text-slate-400">
                 {blind.missed.map((t) => <li key={t}>• {t}</li>)}
               </ul>

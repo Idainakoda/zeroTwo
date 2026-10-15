@@ -13,8 +13,8 @@ export default function ChatWindow({ messages, busy, selectedId, onSelect }) {
   if (messages.length === 0 && !busy) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 py-16 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/10">
-          <MessageSquareLock className="h-7 w-7 text-cyan-300" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-400/10">
+          <MessageSquareLock className="h-7 w-7 text-indigo-300" />
         </div>
         <h2 className="mt-4 text-lg font-semibold text-white">Secure AI assistant</h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">

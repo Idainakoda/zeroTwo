@@ -47,7 +47,7 @@ export default function MyActivityPage() {
                 <p className="mt-2 text-xs text-slate-400">{a.reason}</p>
                 {a.reviewerNote && <p className="mt-1 text-xs text-slate-500">Reviewer note: {a.reviewerNote}</p>}
                 {a.status === "APPROVED" && (
-                  <button onClick={() => setOpen(open === a.id ? null : a.id)} className="mt-2 text-xs text-cyan-300 hover:text-cyan-200">
+                  <button onClick={() => setOpen(open === a.id ? null : a.id)} className="mt-2 text-xs text-indigo-300 hover:text-indigo-200">
                     {open === a.id ? "Hide answer" : "Show answer"}
                   </button>
                 )}

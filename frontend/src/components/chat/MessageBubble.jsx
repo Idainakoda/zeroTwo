@@ -71,7 +71,7 @@ function AnswerText({ text }) {
 export function UserBubble({ message }) {
   return (
     <div className="flex justify-end gap-3">
-      <div className="max-w-[85%] rounded-2xl rounded-tr-sm border border-cyan-300/15 bg-cyan-300/[0.07] px-4 py-3">
+      <div className="max-w-[85%] rounded-2xl rounded-tr-sm border border-indigo-400/15 bg-indigo-400/[0.07] px-4 py-3">
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-100">
           <HighlightedText text={message.text} findings={message.result?.findings} />
         </p>
@@ -109,16 +109,16 @@ export function GatewayBubble({ message, selected, onSelect }) {
 
   return (
     <div className="flex gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-300/10">
-        <Bot className="h-4 w-4 text-cyan-300" />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-indigo-400/30 bg-indigo-400/10">
+        <Bot className="h-4 w-4 text-indigo-300" />
       </div>
       <div
         role="button"
         tabIndex={0}
         onClick={onSelect}
         onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) onSelect(); }}
-        className={`min-w-0 cursor-pointer max-w-[90%] flex-1 rounded-2xl rounded-tl-sm border bg-[#0d1424] px-4 py-3 text-left transition ${
-          selected ? "border-cyan-300/40 ring-1 ring-cyan-300/20" : "border-white/10 hover:border-white/20"
+        className={`min-w-0 cursor-pointer max-w-[90%] flex-1 rounded-2xl rounded-tl-sm border zt-glass px-4 py-3 text-left transition ${
+          selected ? "border-indigo-400/40 ring-1 ring-indigo-400/20" : "border-white/10 hover:border-white/20"
         }`}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -153,7 +153,7 @@ export function GatewayBubble({ message, selected, onSelect }) {
               tabIndex={0}
               onClick={(e) => { e.stopPropagation(); setShowSent(!showSent); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); setShowSent(!showSent); } }}
-              className="inline-flex items-center gap-1 text-xs text-cyan-300 hover:text-cyan-200"
+              className="inline-flex items-center gap-1 text-xs text-indigo-300 hover:text-indigo-200"
             >
               {showSent ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
               What the AI model received

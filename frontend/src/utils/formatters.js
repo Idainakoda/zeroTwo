@@ -27,6 +27,7 @@ export const TONE_CLASSES = {
   sky: "border-sky-400/25 bg-sky-400/10 text-sky-300",
   violet: "border-violet-400/25 bg-violet-400/10 text-violet-300",
   rose: "border-rose-400/25 bg-rose-400/10 text-rose-300",
+  indigo: "border-indigo-400/25 bg-indigo-400/10 text-indigo-200",
   slate: "border-white/10 bg-white/5 text-slate-300",
 };
 
@@ -37,6 +38,7 @@ export const TONE_HEX = {
   sky: "#38bdf8",
   violet: "#a78bfa",
   rose: "#fb7185",
+  indigo: "#818cf8",
   slate: "#94a3b8",
 };
 

@@ -43,8 +43,8 @@ export default function PromptInput({ onSend, busy }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          <Sparkles className="h-3 w-3" /> Try
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-mist">
+          <Sparkles className="h-3 w-3" /> Try a scenario
         </span>
         {SCENARIOS.map((s) => (
           <button
@@ -53,14 +53,14 @@ export default function PromptInput({ onSend, busy }) {
             onClick={() => applyScenario(s)}
             aria-label={`${s.group}: ${s.label}`}
             title={s.group}
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300 transition hover:border-cyan-300/40 hover:text-cyan-200"
+            className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300 transition hover:border-indigo-400/40 hover:text-indigo-200"
           >
             {s.label}
           </button>
         ))}
       </div>
 
-      <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-[#0a1120] p-3 focus-within:border-cyan-300/40">
+      <form onSubmit={submit} className="rounded-2xl zt-input p-3 focus-within:border-indigo-400/40">
         <label htmlFor="prompt" className="sr-only">Message</label>
         <textarea
           id="prompt"
@@ -91,7 +91,7 @@ export default function PromptInput({ onSend, busy }) {
               onClick={() => setUseDocuments(!useDocuments)}
               aria-pressed={useDocuments}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition ${
-                useDocuments ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-200" : "border-white/10 text-slate-400 hover:text-white"
+                useDocuments ? "border-indigo-400/40 bg-indigo-400/10 text-indigo-200" : "border-white/10 text-slate-400 hover:text-white"
               }`}
             >
               <FileText className="h-3.5 w-3.5" /> Use department documents
@@ -109,7 +109,7 @@ export default function PromptInput({ onSend, busy }) {
           <button
             type="submit"
             disabled={busy || !text.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-300 to-sky-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-xl zt-button px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-40"
           >
             {busy ? "Checking..." : "Send securely"} <SendHorizontal className="h-4 w-4" />
           </button>

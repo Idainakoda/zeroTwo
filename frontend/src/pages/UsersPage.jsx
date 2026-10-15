@@ -6,7 +6,7 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 
 const CLEARANCES = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "SECRET"];
 const ROLES = ["EMPLOYEE", "SECURITY_ANALYST", "ADMIN"];
-const selectClass = "rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-300/40";
+const selectClass = "rounded-lg zt-input px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-400/40";
 
 export default function UsersPage() {
   const { token, user: me } = useAuth();
@@ -63,7 +63,7 @@ export default function UsersPage() {
                     <td className="px-3 py-3">
                       <input defaultValue={u.department} aria-label={`Department of ${u.fullName}`}
                         onBlur={(e) => e.target.value !== u.department && change(u, { department: e.target.value })}
-                        className="w-36 rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-300/40" />
+                        className="w-36 rounded-lg zt-input px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-400/40" />
                     </td>
                     <td className="px-3 py-3">
                       <select value={u.clearance} onChange={(e) => change(u, { clearance: e.target.value })} className={selectClass}

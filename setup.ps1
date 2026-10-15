@@ -1,5 +1,5 @@
 <#
-  One-time setup for the CyberCup AI Security Gateway on Windows.
+  One-time setup for the ZeroTwo AI security gateway on Windows.
   - Uses Java 21 / Node 22 from PATH, or downloads portable copies into .\tools (no admin rights needed)
   - Creates the Python environment for the security engine and downloads its models
   - Installs the frontend packages

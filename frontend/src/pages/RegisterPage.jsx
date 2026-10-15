@@ -1,9 +1,25 @@
-
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Info } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import Logo from "../components/brand/Logo";
+import { PORTALS } from "../utils/routing";
+
+const COPY = {
+  employee: {
+    title: "Create your employee account.",
+    text: "New accounts start with public-document access. An administrator can add your department and raise your clearance.",
+    button: "Create account",
+  },
+  admin: {
+    title: "Request administrator access.",
+    text: "For safety, nobody can make themselves an administrator. We create your account with employee access; an existing administrator then grants the administrator role in Users & clearance.",
+    button: "Create account and request access",
+  },
+};
 
 export default function RegisterPage() {
+  const { portal = "employee" } = useParams();
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -16,27 +32,31 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const p = PORTALS[portal];
+  if (!p) return <Navigate to="/register/employee" replace />;
+  const copy = COPY[portal];
+  const Icon = p.icon;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (password.length < 8 || password.length > 72) {
       setError("Password must be between 8 and 72 characters.");
       return;
     }
-
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
-
     setLoading(true);
-
     try {
-      const result = await register(fullName.trim(), email.trim(), password);
-      setSuccess(result?.message || "Account created. You can now sign in.");
-      setTimeout(() => navigate("/login", { replace: true }), 1200);
+      await register(fullName.trim(), email.trim(), password);
+      setSuccess(portal === "admin"
+        ? "Account created with employee access. Ask an administrator to grant you the administrator role, then sign in to the administrator workspace."
+        : "Account created. You can now sign in.");
+      setTimeout(() => navigate(`/login/${portal === "admin" ? "employee" : "employee"}`, { replace: true }),
+                 portal === "admin" ? 4500 : 1500);
     } catch (err) {
       setError(err.message || "Registration failed. Please try again.");
     } finally {
@@ -44,221 +64,81 @@ export default function RegisterPage() {
     }
   }
 
-  const inputClass =
-    "w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10";
+  const inputClass = "zt-input w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-500";
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#07111f] px-4 py-8 text-slate-900 sm:px-8 sm:py-12">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-cyan-400/20 blur-[130px]" />
-        <div className="absolute -bottom-40 -left-20 h-[30rem] w-[30rem] rounded-full bg-blue-600/20 blur-[140px]" />
-        <div className="absolute inset-0 opacity-[0.045] [background-image:radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:20px_20px]" />
+    <main className="min-h-screen text-ink">
+      <div className="mx-auto flex max-w-[1240px] items-center justify-between px-5 py-6 sm:px-8">
+        <Link to="/" aria-label="ZeroTwo home"><Logo size={38} /></Link>
+        <Link to={`/login/${portal}`} className="inline-flex items-center gap-2 text-sm text-mist hover:text-white">
+          <ArrowLeft className="h-4 w-4" /> Back to sign in
+        </Link>
       </div>
 
-      <div className="relative mx-auto max-w-6xl">
-        <header className="mb-8 flex items-center justify-between">
-          <Link to="/login" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/30 bg-cyan-300/10 text-cyan-200">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
+      <div className="mx-auto grid max-w-[1240px] items-center gap-10 px-5 pb-16 pt-4 sm:px-8 lg:grid-cols-[1fr_480px] lg:pt-10">
+        <section>
+          <span className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${p.tone} text-white shadow-lg`}>
+            <Icon className="h-6 w-6" />
+          </span>
+          <p className="mt-6 text-sm font-semibold text-[#a5b4fc]">{p.name}</p>
+          <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-white sm:text-5xl">{copy.title}</h1>
+          <p className="mt-4 max-w-lg text-base leading-7 text-mist">{copy.text}</p>
+        </section>
+
+        <section className="zt-glass-strong rounded-3xl p-6 shadow-[0_40px_120px_-40px_rgba(79,124,255,0.5)] sm:p-8">
+          <h2 className="font-display text-2xl font-semibold text-white">Your details</h2>
+          <p className="mt-1.5 text-sm text-mist">Use your official work email.</p>
+
+          {portal === "admin" && (
+            <div className="mt-5 flex gap-3 rounded-xl border border-[#a78bfa]/25 bg-[#7c3aed]/10 p-3 text-sm text-violet-100">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
+              Administrator rights are granted by an existing administrator, never by sign-up.
             </div>
-            <span className="text-lg font-bold tracking-[0.15em] text-white">
-              CYBER<span className="text-cyan-300">CUP</span>
-            </span>
-          </Link>
-          <p className="hidden text-sm text-slate-400 sm:block">
+          )}
+          {error && <div role="alert" className="mt-5 rounded-xl border border-rose-400/25 bg-rose-400/10 p-3 text-sm text-rose-100">{error}</div>}
+          {success && <div role="status" className="mt-5 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-sm text-emerald-100">{success}</div>}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="register-name" className="mb-1.5 block text-sm text-slate-300">Full name</label>
+              <input id="register-name" type="text" autoComplete="name" maxLength={100} required placeholder="Your full name"
+                     value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label htmlFor="register-email" className="mb-1.5 block text-sm text-slate-300">Work email</label>
+              <input id="register-email" type="email" autoComplete="email" maxLength={150} required placeholder="you@department.gov.in"
+                     value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="register-password" className="mb-1.5 block text-sm text-slate-300">Password</label>
+                <input id="register-password" type={showPassword ? "text" : "password"} autoComplete="new-password"
+                       minLength={8} maxLength={72} required placeholder="At least 8 characters"
+                       value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="register-confirm" className="mb-1.5 block text-sm text-slate-300">Confirm password</label>
+                <input id="register-confirm" type={showPassword ? "text" : "password"} autoComplete="new-password" required
+                       placeholder="Type it again" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                       className={inputClass} />
+              </div>
+            </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-mist">
+              <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)}
+                     className="h-4 w-4 accent-indigo-500" />
+              Show passwords
+            </label>
+            <button type="submit" disabled={loading || Boolean(success)}
+                    className="zt-button flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60">
+              {loading ? "Creating account…" : success ? "Account created" : copy.button}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-mist">
             Already have an account?{" "}
-            <Link to="/login" className="font-semibold text-cyan-300 hover:text-cyan-200">
-              Sign in
-            </Link>
+            <Link to={`/login/${portal}`} className="font-medium text-[#a5b4fc] hover:text-white">Sign in</Link>
           </p>
-        </header>
-
-        <div className="grid items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
-          {/* Registration intro */}
-          <section className="text-white">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-2 text-xs tracking-widest text-cyan-200">
-              <span className="h-2 w-2 rounded-full bg-cyan-300" />
-              GET STARTED
-            </div>
-
-            <h1 className="text-4xl font-semibold leading-tight sm:text-5xl">
-              Build a safer
-              <br />
-              <span className="text-cyan-300">AI workflow.</span>
-            </h1>
-
-            <p className="mt-5 max-w-md text-base leading-7 text-slate-400">
-              Create your CyberCup account and get access to a workspace
-              designed to help protect sensitive information in AI interactions.
-            </p>
-
-            <div className="mt-9 space-y-4">
-              {[
-                ["01", "Create your account", "Register securely with your work details."],
-                ["02", "Access your workspace", "Sign in to your assigned CyberCup role."],
-                ["03", "Use AI more safely", "Submit prompts through the security gateway."],
-              ].map(([number, title, description]) => (
-                <div key={number} className="flex gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 backdrop-blur-xl">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-sm font-semibold text-cyan-200">
-                    {number}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">{title}</h3>
-                    <p className="mt-1 text-sm leading-5 text-slate-400">{description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Separate light registration form */}
-          <section className="rounded-[2rem] border border-white/40 bg-white p-6 shadow-[0_35px_100px_rgba(0,0,0,0.35)] sm:p-9 lg:p-10">
-            <div className="mb-7">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-800">
-                  STEP 01 / 01
-                </span>
-                <span className="text-xs font-medium text-slate-400">Account details</span>
-              </div>
-
-              <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full w-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500" />
-              </div>
-
-              <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Create your account
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Enter your details to register as a CyberCup employee.
-              </p>
-            </div>
-
-            {error && (
-              <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            {success && (
-              <div role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-                {success}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label htmlFor="register-name" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Full name
-                </label>
-                <input
-                  id="register-name"
-                  type="text"
-                  autoComplete="name"
-                  maxLength={100}
-                  required
-                  placeholder="Enter your full name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="register-email" className="mb-2 block text-sm font-semibold text-slate-700">
-                  Work email
-                </label>
-                <input
-                  id="register-email"
-                  type="email"
-                  autoComplete="email"
-                  maxLength={150}
-                  required
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="register-password" className="mb-2 block text-sm font-semibold text-slate-700">
-                    Password
-                  </label>
-                  <input
-                    id="register-password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    minLength={8}
-                    maxLength={72}
-                    required
-                    placeholder="At least 8 characters"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="register-confirm" className="mb-2 block text-sm font-semibold text-slate-700">
-                    Confirm password
-                  </label>
-                  <input
-                    id="register-confirm"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    required
-                    placeholder="Re-enter password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={showPassword}
-                  onChange={(e) => setShowPassword(e.target.checked)}
-                  className="h-4 w-4 accent-cyan-600"
-                />
-                Show passwords
-              </label>
-
-              <button
-                type="submit"
-                disabled={loading || Boolean(success)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#07111f] px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Creating account..." : success ? "Account created" : "Create account"}
-                {!loading && !success && <span className="text-cyan-300">→</span>}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-slate-500 sm:hidden">
-              Already registered?{" "}
-              <Link to="/login" className="font-semibold text-cyan-700">
-                Sign in
-              </Link>
-            </p>
-
-            <div className="mt-6 flex items-center justify-center gap-2 border-t border-slate-100 pt-5 text-xs text-slate-400">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 text-cyan-600" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <rect x="5" y="10" width="14" height="11" rx="2" />
-                <path d="M8 10V7a4 4 0 0 1 8 0v3" />
-              </svg>
-              Your account is protected by CyberCup authentication.
-            </div>
-          </section>
-        </div>
-
-        <footer className="mt-10 text-center text-xs text-slate-500">
-          CYBERCUP · Protected by design. Built for safer AI.
-        </footer>
+        </section>
       </div>
     </main>
   );

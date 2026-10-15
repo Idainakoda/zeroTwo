@@ -1,37 +1,40 @@
 import { NavLink } from "react-router-dom";
 import {
   BarChart3,
+  BookOpenCheck,
   ClipboardCheck,
   FileLock2,
   FlaskConical,
   History,
-  LogOut,
   MessagesSquare,
   MessageSquareLock,
   ScrollText,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import Logo from "../brand/Logo";
 
 const EMPLOYEE_LINKS = [
-  { to: "/assistant", label: "Secure Assistant", icon: MessageSquareLock },
-  { to: "/activity", label: "My Activity", icon: History },
+  { to: "/assistant", label: "Secure assistant", icon: MessageSquareLock },
+  { to: "/activity", label: "My activity", icon: History },
   { to: "/documents", label: "Documents", icon: FileLock2 },
+  { to: "/guidelines", label: "Guidelines", icon: BookOpenCheck },
 ];
 
 const MONITOR_LINKS = [
   { to: "/admin", label: "Overview", icon: BarChart3, end: true },
-  { to: "/admin/prompts", label: "Prompt Log", icon: MessagesSquare },
+  { to: "/admin/prompts", label: "Prompt log", icon: MessagesSquare },
   { to: "/admin/incidents", label: "Incidents", icon: ShieldAlert },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck },
-  { to: "/admin/audit", label: "Audit Log", icon: ScrollText },
+  { to: "/admin/audit", label: "Audit log", icon: ScrollText },
   { to: "/admin/policies", label: "Policies", icon: SlidersHorizontal },
-  { to: "/admin/evaluation", label: "Evaluation Lab", icon: FlaskConical },
+  { to: "/admin/evaluation", label: "Evaluation lab", icon: FlaskConical },
 ];
 
-const ADMIN_ONLY = [{ to: "/admin/users", label: "Users & Clearance", icon: Users }];
+const ADMIN_ONLY = [{ to: "/admin/users", label: "Users & clearance", icon: Users }];
 
 function Item({ to, label, icon: Icon, end, onNavigate }) {
   return (
@@ -42,60 +45,44 @@ function Item({ to, label, icon: Icon, end, onNavigate }) {
       className={({ isActive }) =>
         `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
           isActive
-            ? "bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-300/20"
-            : "text-slate-400 hover:bg-white/5 hover:text-white"
+            ? "bg-gradient-to-r from-[#4f7cff]/35 to-[#8b5cf6]/20 font-medium text-white ring-1 ring-indigo-300/35 shadow-[inset_3px_0_0_#8ea8ff]"
+            : "text-mist hover:bg-white/[0.05] hover:text-white"
         }`
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-[18px] w-[18px] shrink-0" />
       {label}
     </NavLink>
   );
 }
 
 export default function Sidebar({ onNavigate }) {
-  const { user, isAdmin, isMonitor, logout } = useAuth();
+  const { isAdmin, isMonitor } = useAuth();
 
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-white/10 bg-[#070c18] px-4 py-5">
-      <div className="flex items-center gap-3 px-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-cyan-300/30 bg-cyan-300/10">
-          <svg viewBox="0 0 24 24" className="h-5 w-5 text-cyan-300" fill="none" stroke="currentColor" strokeWidth="1.7">
-            <path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" />
-            <path d="m9 12 2 2 4-4" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-sm font-bold tracking-[0.18em] text-white">
-            CYBER<span className="text-cyan-300">CUP</span>
-          </p>
-          <p className="text-[11px] text-slate-500">AI Security Gateway</p>
-        </div>
+    <aside className="flex h-full w-64 flex-col border-r border-[var(--zt-line)] bg-[#070b1d]/80 px-4 py-5 backdrop-blur-xl">
+      <div className="px-2">
+        <Logo size={38} />
       </div>
 
-      <nav className="mt-7 flex-1 space-y-6 overflow-y-auto">
+      <nav className="mt-8 flex-1 space-y-6 overflow-y-auto" aria-label="Main">
         <div className="space-y-1">
-          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">Workspace</p>
+          <p className="px-3 pb-1 text-xs font-medium text-mist/70">Workspace</p>
           {EMPLOYEE_LINKS.map((l) => <Item key={l.to} {...l} onNavigate={onNavigate} />)}
         </div>
         {isMonitor && (
           <div className="space-y-1">
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-600">Security</p>
+            <p className="px-3 pb-1 text-xs font-medium text-mist/70">Security</p>
             {MONITOR_LINKS.map((l) => <Item key={l.to} {...l} onNavigate={onNavigate} />)}
             {isAdmin && ADMIN_ONLY.map((l) => <Item key={l.to} {...l} onNavigate={onNavigate} />)}
           </div>
         )}
       </nav>
 
-      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-        <p className="truncate text-sm font-medium text-white">{user?.fullName}</p>
-        <p className="truncate text-xs text-slate-500">{user?.email}</p>
-        <button
-          onClick={logout}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-1.5 text-xs text-slate-300 hover:bg-white/5"
-        >
-          <LogOut className="h-3.5 w-3.5" /> Sign out
-        </button>
+      <div className="zt-glass mt-4 rounded-2xl p-4">
+        <ShieldCheck className="h-6 w-6 text-[#a5b4fc]" />
+        <p className="mt-3 font-display text-sm font-semibold text-white">Keep data safe.</p>
+        <p className="mt-1 text-xs leading-5 text-mist">Every prompt is checked before the AI sees it.</p>
       </div>
     </aside>
   );

@@ -1,4 +1,4 @@
-# Running CyberCup across two laptops (shared MySQL database)
+# Running ZeroTwo across two laptops (shared MySQL database)
 
 Goal: the backend and the **MySQL database run on one teammate's laptop**. The other laptop runs the security engine and the frontend. Every prompt anyone sends is recorded in that MySQL database in real time, and you can watch it in MySQL Workbench.
 
@@ -99,7 +99,7 @@ It prints `[OK]` or `[FAIL]` (with the fix) for MySQL, the engine and the backen
 | `[FAIL] TCP connection to MySQL` | MySQL80 service running? Firewall opened with `-MySQL`? Same network / Tailscale? |
 | `Public Key Retrieval is not allowed` | Keep `allowPublicKeyRetrieval=true` in `DB_URL` |
 | `Access denied for user 'cybercup'@'...'` | Wrong password, or `mysql-setup.sql` not run (the user must be `'cybercup'@'%'`) |
-| Frontend shows *Cannot connect to the CyberCup backend* | `BACKEND_URL` on laptop A, `SHARE_ON_NETWORK=true` + port 8080 open on laptop B |
+| Frontend shows *Cannot connect to the ZeroTwo backend* | `BACKEND_URL` on laptop A, `SHARE_ON_NETWORK=true` + port 8080 open on laptop B |
 | Every prompt is blocked: *Security engine is unavailable* | Backend can't reach the engine: `AI_ENGINE_BASE_URL`, port 8000 on laptop A, same `ENGINE_API_KEY` on both |
 | CORS error in the browser console | Add the frontend address you opened (e.g. `http://192.168.1.15:5173`) to `EXTRA_CORS_ORIGINS` on the backend laptop |
 

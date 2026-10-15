@@ -3,7 +3,7 @@ import { AlertTriangle, Info, ShieldX } from "lucide-react";
 const STYLES = {
   warn: { box: "border-amber-400/25 bg-amber-400/[0.07] text-amber-100", icon: AlertTriangle, iconColor: "text-amber-300" },
   block: { box: "border-rose-400/25 bg-rose-400/[0.07] text-rose-100", icon: ShieldX, iconColor: "text-rose-300" },
-  info: { box: "border-cyan-400/20 bg-cyan-400/[0.05] text-cyan-100", icon: Info, iconColor: "text-cyan-300" },
+  info: { box: "border-indigo-400/25 bg-indigo-400/[0.07] text-indigo-100", icon: Info, iconColor: "text-indigo-300" },
 };
 
 export default function SecurityAlert({ kind = "info", title, items = [], children }) {

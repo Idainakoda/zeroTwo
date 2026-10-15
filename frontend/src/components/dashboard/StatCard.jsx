@@ -1,8 +1,8 @@
 import { TONE_CLASSES } from "../../utils/formatters";
 
-export default function StatCard({ label, value, detail, icon: Icon, tone = "cyan" }) {
+export default function StatCard({ label, value, detail, icon: Icon, tone = "indigo" }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-4">
+    <div className="rounded-2xl zt-glass p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs font-medium text-slate-400">{label}</p>
         {Icon && (

@@ -26,7 +26,7 @@ public class GatewayService {
     private static final Map<String, Integer> LEVELS = Map.of("PUBLIC", 0, "INTERNAL", 1, "CONFIDENTIAL", 2, "SECRET", 3);
 
     private static final String SYSTEM_PROMPT = """
-            You are the secure AI assistant of a government department, reached through the CyberCup security gateway.
+            You are the secure AI assistant of a government department, reached through the ZeroTwo security gateway.
             Answer clearly and concisely in the language of the question. Use simple formatting.
             Some requests include reference documents from the department's knowledge base. Only when they are included,
             base your answer on them, name the document title you used, and say so if they do not contain the answer.

@@ -15,15 +15,15 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import StatusBadge from "../components/common/StatusBadge";
 import { ACTION_META, categoryLabel, formatMs, TONE_HEX, typeLabel } from "../utils/formatters";
 
-// Validated categorical palette for the dark surface (#0d1424): fixed order, never cycled.
+// Validated categorical palette for the glass surface (#0e1432): fixed order, never cycled.
 const SERIES = [
-  { key: "requests", name: "Requests", color: "#0891b2" },
-  { key: "protected", name: "Masked / held", color: "#8b5cf6" },
+  { key: "requests", name: "Requests", color: "#4f7cff" },
+  { key: "protected", name: "Masked / held", color: "#0d9488" },
   { key: "blocked", name: "Blocked", color: "#d97706" },
 ];
 const AXIS = { stroke: "#334155", tick: { fill: "#94a3b8", fontSize: 11 } };
 const TOOLTIP = {
-  contentStyle: { background: "#0b1222", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, fontSize: 12 },
+  contentStyle: { background: "#0c1236", border: "1px solid rgba(148,163,255,.25)", borderRadius: 12, fontSize: 12 },
   labelStyle: { color: "#e2e8f0" },
   itemStyle: { color: "#cbd5e1" },
   cursor: { stroke: "rgba(148,163,184,.3)" },
@@ -89,12 +89,12 @@ export default function AdminDashboardPage() {
       <ErrorBox message={error} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label="Requests inspected" value={t.requests} detail="All time" icon={Activity} tone="cyan" />
+        <StatCard label="Requests inspected" value={t.requests} detail="All time" icon={Activity} tone="indigo" />
         <StatCard label="Incidents" value={t.incidents} detail="Flagged requests" icon={ShieldAlert} tone="amber" />
         <StatCard label="Blocked" value={t.blocked} detail={`${t.responseBlocked} answers withheld`} icon={ShieldX} tone="rose" />
         <StatCard label="Masked / redacted" value={t.masked} detail={`${t.responseRedacted} answers redacted`} icon={EyeOff} tone="violet" />
         <StatCard label="Restricted retrievals" value={t.retrievalDenied} detail={`${t.documentsUsed} used documents`} icon={FileLock2} tone="sky" />
-        <StatCard label="Pending approvals" value={t.pendingApprovals} detail={<Link to="/admin/approvals" className="text-cyan-300 hover:underline">Review queue →</Link>} icon={ClipboardCheck} tone="emerald" />
+        <StatCard label="Pending approvals" value={t.pendingApprovals} detail={<Link to="/admin/approvals" className="text-indigo-300 hover:underline">Review queue →</Link>} icon={ClipboardCheck} tone="emerald" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-3">
@@ -149,7 +149,7 @@ export default function AdminDashboardPage() {
                   <XAxis type="number" allowDecimals={false} {...AXIS} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={118} {...AXIS} tickLine={false} axisLine={false} />
                   <Tooltip {...TOOLTIP} cursor={{ fill: "rgba(148,163,184,.06)" }} />
-                  <Bar dataKey="count" name="Requests" fill="#0891b2" radius={[0, 4, 4, 0]} barSize={14} />
+                  <Bar dataKey="count" name="Requests" fill="#4f7cff" radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -192,7 +192,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <Card className="mt-6">
-        <CardTitle title="Recent incidents" right={<Link to="/admin/incidents" className="text-xs text-cyan-300 hover:underline">All incidents →</Link>} />
+        <CardTitle title="Recent incidents" right={<Link to="/admin/incidents" className="text-xs text-indigo-300 hover:underline">All incidents →</Link>} />
         <IncidentTable incidents={incidents.slice(0, 8)} />
       </Card>
     </div>

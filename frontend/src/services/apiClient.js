@@ -1,7 +1,7 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-export const UNAUTHORIZED_EVENT = "cybercup:unauthorized";
+export const UNAUTHORIZED_EVENT = "zerotwo:unauthorized";
 
 export async function apiRequest(
   endpoint,
@@ -30,7 +30,7 @@ export async function apiRequest(
     });
   } catch {
     throw new Error(
-      "Cannot connect to the CyberCup backend. Check that the server is running."
+      "Cannot connect to the ZeroTwo backend. Check that the server is running."
     );
   }
 

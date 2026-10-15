@@ -53,7 +53,7 @@ export default function ApprovalsPage() {
       <div className="mb-4 flex gap-2">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`rounded-xl px-4 py-2 text-sm transition ${tab === t ? "bg-cyan-300 text-slate-950" : "border border-white/10 text-slate-400 hover:text-white"}`}>
+            className={`rounded-xl px-4 py-2 text-sm transition ${tab === t ? "zt-button" : "border border-white/10 text-slate-400 hover:text-white"}`}>
             {t.charAt(0) + t.slice(1).toLowerCase()} ({(items || []).filter((a) => a.status === t).length})
           </button>
         ))}
@@ -87,7 +87,7 @@ export default function ApprovalsPage() {
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <input value={notes[a.id] || ""} onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })}
                     placeholder="Note for the record (optional)"
-                    className="min-w-[220px] flex-1 rounded-lg border border-white/10 bg-[#0a1120] px-3 py-2 text-xs text-slate-200 outline-none focus:border-cyan-300/40" />
+                    className="min-w-[220px] flex-1 rounded-lg zt-input px-3 py-2 text-xs text-slate-200 outline-none focus:border-indigo-400/40" />
                   <Button variant="danger" disabled={busy === a.id} onClick={() => decide(a.id, false)}><X className="h-4 w-4" /> Reject</Button>
                   <Button variant="success" disabled={busy === a.id} onClick={() => decide(a.id, true)}>
                     <Check className="h-4 w-4" /> {busy === a.id ? "Sending to AI..." : "Approve & send"}

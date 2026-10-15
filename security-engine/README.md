@@ -1,4 +1,4 @@
-# CyberCup Security Engine (FastAPI)
+# ZeroTwo Security Engine (FastAPI)
 
 This is the Python security engine from the team's architecture. Spring Boot calls it **before** a prompt goes to the external AI and **after** the AI answers. It returns findings and an `ALLOW` / `SANITIZE` / `BLOCK` recommendation. Spring Boot then applies the organisation's policy and stores the `audit` record in MySQL.
 

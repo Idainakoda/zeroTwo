@@ -1,1 +1,107 @@
+@import "@fontsource-variable/sora";
+@import "@fontsource-variable/plus-jakarta-sans";
 @import "tailwindcss";
+
+/* ZeroTwo design tokens: "the gateway at night" */
+@theme {
+  --font-sans: "Plus Jakarta Sans Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Sora Variable", "Plus Jakarta Sans Variable", "Segoe UI", system-ui, sans-serif;
+
+  --color-night: #060a1a;
+  --color-abyss: #0b1130;
+  --color-signal: #4f7cff;
+  --color-iris: #8b5cf6;
+  --color-halo: #7dd3fc;
+  --color-ink: #e7eaf6;
+  --color-mist: #a3acd0;
+}
+
+:root {
+  color-scheme: dark;
+  --zt-glass: rgba(14, 20, 50, 0.56);
+  --zt-glass-strong: rgba(12, 17, 44, 0.78);
+  --zt-line: rgba(148, 163, 255, 0.14);
+  --zt-line-strong: rgba(148, 163, 255, 0.26);
+}
+
+html {
+  background: var(--color-night);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* transparent: the fixed backdrop sits behind the page; html carries the night colour */
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid #8ea8ff;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@layer components {
+  /* Translucent panel: the backdrop shows through, as in the reference screens */
+  .zt-glass {
+    background: var(--zt-glass);
+    border: 1px solid var(--zt-line);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .zt-glass-strong {
+    background: var(--zt-glass-strong);
+    border: 1px solid var(--zt-line);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+  }
+
+  .zt-gradient-text {
+    background: linear-gradient(100deg, #6f9bff 0%, #8b7bff 45%, #a78bfa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .zt-button {
+    background: linear-gradient(100deg, var(--color-signal), var(--color-iris));
+    color: #fff;
+    box-shadow: 0 10px 30px -12px rgba(111, 108, 255, 0.75);
+  }
+
+  .zt-button:hover {
+    filter: brightness(1.08);
+  }
+
+  .zt-input {
+    background: rgba(8, 12, 34, 0.62);
+    border: 1px solid var(--zt-line);
+  }
+
+  .zt-input:focus {
+    border-color: rgba(129, 140, 248, 0.6);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -23,7 +23,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="CyberCup Security Engine", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ZeroTwo Security Engine", version="1.0.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

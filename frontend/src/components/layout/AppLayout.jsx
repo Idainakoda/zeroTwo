@@ -7,7 +7,7 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#050816] text-slate-200">
+    <div className="min-h-screen text-ink">
       <div className="fixed inset-y-0 left-0 z-30 hidden lg:block">
         <Sidebar />
       </div>
@@ -23,7 +23,7 @@ export default function AppLayout() {
 
       <div className="lg:pl-64">
         <Navbar onMenu={() => setMenuOpen(true)} />
-        <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+        <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
           <Outlet />
         </main>
       </div>

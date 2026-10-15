@@ -45,9 +45,9 @@ function LayerBar({ label, value }) {
 export default function InspectionStatus({ result }) {
   if (!result) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-5">
+      <div className="rounded-2xl zt-glass p-5">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
-          <ShieldCheck className="h-4 w-4 text-cyan-300" /> Security inspector
+          <ShieldCheck className="h-4 w-4 text-indigo-300" /> Security inspector
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-400">
           Send a message to see how the gateway checks it: personal data, secrets, prompt injection,
@@ -67,10 +67,10 @@ export default function InspectionStatus({ result }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-5">
+      <div className="rounded-2xl zt-glass p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Gateway decision</p>
+            <p className="text-xs font-medium text-mist">Gateway decision</p>
             <div className="mt-2 flex items-center gap-2">
               {blocked ? <ShieldX className="h-5 w-5 text-rose-300" /> : <ShieldCheck className="h-5 w-5 text-emerald-300" />}
               <StatusBadge action={action} className="text-xs" />
@@ -110,7 +110,7 @@ export default function InspectionStatus({ result }) {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-5">
+      <div className="rounded-2xl zt-glass p-5">
         <p className="mb-3 text-sm font-semibold text-white">Prompt-injection layers</p>
         <div className="space-y-3">
           <LayerBar label="Rules (English, Hinglish, Hindi)" value={layers.rules} />
@@ -120,18 +120,18 @@ export default function InspectionStatus({ result }) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-5">
+      <div className="rounded-2xl zt-glass p-5">
         <p className="mb-3 text-sm font-semibold text-white">Findings</p>
         <FindingList findings={result.findings} />
         {(result.answerFindings || []).length > 0 && (
           <>
-            <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">In the AI&apos;s answer</p>
+            <p className="mb-2 mt-4 text-xs font-medium text-mist">In the AI&apos;s answer</p>
             <FindingList findings={result.answerFindings} compact />
           </>
         )}
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-[#0d1424] p-5">
+      <div className="rounded-2xl zt-glass p-5">
         <p className="mb-3 text-sm font-semibold text-white">Policies applied</p>
         <PolicyActionBadge policies={result.policies} />
         <p className="mt-4 flex items-start gap-2 border-t border-white/5 pt-3 text-[11px] leading-4 text-slate-500">

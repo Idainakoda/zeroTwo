@@ -43,8 +43,8 @@ export default function ChatPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Secure assistant"
-        title={`Hello, ${user?.fullName?.split(" ")[0] || "there"}`}
+        eyebrow="Employee workspace"
+        title={<>Hello, <span className="zt-gradient-text">{user?.fullName?.split(" ")[0] || "there"}.</span></>}
         text="Ask the department's AI assistant. The gateway checks every message and every answer, and only uses documents your clearance allows."
         right={
           messages.length > 0 && (
@@ -59,7 +59,7 @@ export default function ChatPage() {
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex min-h-[70vh] flex-col rounded-2xl border border-white/10 bg-[#080e1c]">
+        <div className="flex min-h-[70vh] flex-col rounded-2xl border border-white/10 zt-glass">
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
             <ChatWindow messages={messages} busy={busy} selectedId={selectedId} onSelect={setSelectedId} />
           </div>

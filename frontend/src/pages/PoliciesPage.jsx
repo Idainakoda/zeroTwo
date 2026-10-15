@@ -9,7 +9,7 @@ import StatusBadge from "../components/common/StatusBadge";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 import { ACTION_META, categoryLabel } from "../utils/formatters";
 
-const selectClass = "rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-300/40 disabled:opacity-60";
+const selectClass = "rounded-lg zt-input px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-400/40 disabled:opacity-60";
 
 export default function PoliciesPage() {
   const { token, isAdmin } = useAuth();
@@ -70,7 +70,7 @@ export default function PoliciesPage() {
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {POLICY_ACTIONS.map((a) => (
-          <div key={a} className="rounded-xl border border-white/10 bg-[#0d1424] p-3">
+          <div key={a} className="rounded-xl zt-glass p-3">
             <StatusBadge action={a} />
             <p className="mt-2 text-[11px] leading-4 text-slate-500">{ACTION_META[a].text}</p>
           </div>
@@ -104,7 +104,7 @@ export default function PoliciesPage() {
                     </td>
                     <td className="px-3 py-3">
                       <button disabled={!isAdmin} onClick={() => toggle(p)} role="switch" aria-checked={p.enabled}
-                        className={`relative h-5 w-9 rounded-full transition ${p.enabled ? "bg-cyan-400" : "bg-white/10"} disabled:opacity-60`}>
+                        className={`relative h-5 w-9 rounded-full transition ${p.enabled ? "bg-indigo-500" : "bg-white/10"} disabled:opacity-60`}>
                         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${p.enabled ? "left-[18px]" : "left-0.5"}`} />
                       </button>
                     </td>
@@ -123,7 +123,7 @@ export default function PoliciesPage() {
             <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs text-slate-400">
               New policy name
               <input required value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                className="rounded-lg border border-white/10 bg-[#0a1120] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-300/40" />
+                className="rounded-lg zt-input px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-400/40" />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-400">
               Applies to
@@ -140,7 +140,7 @@ export default function PoliciesPage() {
             <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs text-slate-400">
               Description
               <input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                className="rounded-lg border border-white/10 bg-[#0a1120] px-3 py-2 text-sm text-slate-200 outline-none focus:border-cyan-300/40" />
+                className="rounded-lg zt-input px-3 py-2 text-sm text-slate-200 outline-none focus:border-indigo-400/40" />
             </label>
             <Button type="submit"><Plus className="h-4 w-4" /> Add policy</Button>
           </form>

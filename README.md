@@ -1,4 +1,4 @@
-# CyberCup: AI Security Gateway (CC6-AI03)
+# ZeroTwo: AI Security Gateway (CyberCup CC6-AI03)
 
 A gateway that sits between employees and an AI model. It inspects every prompt and every answer, masks or blocks sensitive data, stops prompt-injection attacks, enforces document access by clearance, and keeps a privacy-safe, tamper-evident audit trail. Legitimate work carries on.
 

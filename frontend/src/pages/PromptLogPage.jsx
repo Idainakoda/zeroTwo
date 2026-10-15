@@ -13,7 +13,7 @@ function MaskedText({ text }) {
   if (!text) return <span className="text-slate-600">Not stored</span>;
   return String(text).split(/(<[A-Z_]+_\d+>)/g).map((part, i) =>
     /^<[A-Z_]+_\d+>$/.test(part)
-      ? <mark key={i} className="rounded bg-cyan-400/15 px-1 text-cyan-200">{part}</mark>
+      ? <mark key={i} className="rounded bg-indigo-400/20 px-1 text-indigo-100">{part}</mark>
       : <span key={i}>{part}</span>
   );
 }
@@ -56,13 +56,13 @@ export default function PromptLogPage() {
       <Card>
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <select value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filter by action"
-            className="rounded-lg border border-white/10 bg-[#0a1120] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-cyan-300/40">
+            className="rounded-lg zt-input px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-400/40">
             {["ALL", "ALLOW", "WARN", "MASK", "REDACT", "REQUIRE_APPROVAL", "BLOCK"].map((a) => (
               <option key={a} value={a}>{a === "ALL" ? "All actions" : a.replace("_", " ").toLowerCase()}</option>
             ))}
           </select>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search prompt, user or type"
-            className="min-w-[220px] flex-1 rounded-lg border border-white/10 bg-[#0a1120] px-3 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-300/40" />
+            className="min-w-[220px] flex-1 rounded-lg zt-input px-3 py-1.5 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-400/40" />
           <span className="text-xs text-slate-500">{shown.length} of {rows?.length || 0}</span>
         </div>
         {!rows ? <LoadingSpinner /> : shown.length === 0 ? (

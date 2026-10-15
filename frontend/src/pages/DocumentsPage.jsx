@@ -25,7 +25,7 @@ export default function DocumentsPage() {
       {!data ? <LoadingSpinner /> : (
         <>
           <Card className="mb-6">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Your access</p>
+            <p className="text-xs font-medium text-mist">Your access</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {LEVELS.map((l) => (
                 <span key={l} className={LEVELS.indexOf(l) <= LEVELS.indexOf(data.clearance) ? "" : "opacity-30"}>
