@@ -55,8 +55,13 @@ def is_educational(clean_text: str) -> bool:
     return bool(injection.EDUCATIONAL.search(clean_text)) and not re.search(r"\b(?:your|ur)\b", clean_text)
 
 
-def _injection_layers(text: str, norm, inj) -> tuple[float, dict, list[Finding], float]:
-    """Runs the ML layers and returns (fused score, per-layer scores, extra findings, ml ms)."""
+def _injection_layers(text: str, norm, inj, has_maskable: bool = False) -> tuple[float, dict, list[Finding], float]:
+    """Runs the ML layers and returns (fused score, per-layer scores, extra findings, ml ms).
+
+    has_maskable: the prompt contains personal data / secrets that will be masked. The classifier
+    reacts to such values themselves (a password sentence can score 1.0), so - as on code - it can
+    then only push the prompt into the grey zone, never block it on its own.
+    """
     if not ml.ready:
         return inj.score, {"rules": inj.score, "semantic": None, "classifier": None, "fused": inj.score}, [], 0.0
     t = time.perf_counter()
@@ -66,7 +71,7 @@ def _injection_layers(text: str, norm, inj) -> tuple[float, dict, list[Finding],
     # The classifier often mistakes source code / config snippets for injections, so on
     # code-like text it can only push the prompt into the grey zone (local Llama), not block.
     code = looks_like_code(text)
-    if code:
+    if code or has_maskable:
         res.classifier = round(res.classifier * 0.5, 3)
     fused = fuse_injection(inj.score, res.semantic, res.classifier, educational)
     extra: list[Finding] = []
@@ -84,7 +89,7 @@ def _injection_layers(text: str, norm, inj) -> tuple[float, dict, list[Finding],
                              detector="deberta-classifier", reason=f"classifier probability {res.classifier:.2f}"))
     layers = {"rules": inj.score, "semantic": res.semantic, "classifier": res.classifier if ml.classifier else None,
               "nearest_attack_similarity": res.nearest_attack, "educational_framing": educational,
-              "code_like": code, "fused": fused}
+              "code_like": code, "classifier_damped": code or has_maskable, "fused": fused}
     return fused, layers, extra, _ms(t)
 
 
@@ -199,7 +204,10 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     t = time.perf_counter()
     inj = injection.scan(norm)
     timing.injection = _ms(t)
-    inj_score, layer_scores, ml_findings, timing.ml = await asyncio.to_thread(_injection_layers, text, norm, inj)
+    has_maskable = any(f.redactable and f.severity >= policy.sanitize_min_severity
+                       and f.category in (Category.PII, Category.FINANCIAL, Category.SECRET) for f in findings)
+    inj_score, layer_scores, ml_findings, timing.ml = await asyncio.to_thread(
+        _injection_layers, text, norm, inj, has_maskable)
     inj.findings.extend(ml_findings)
 
     # Bulk personal data (e.g. a pasted spreadsheet of citizens) is blocked outright.

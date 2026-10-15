@@ -61,11 +61,15 @@ async def run_blind() -> dict:
         g = [score(r, use) for r in legit]
         rows.append({"layers": name, "attacks_blocked": sum(s >= block for s in a), "attacks_to_llm": sum(grey <= s < block for s in a),
                      "legit_blocked": sum(s >= block for s in g), "legit_to_llm": sum(grey <= s < block for s in g)})
-    full = CONFIGS["rules + semantic + classifier"]
+    # The real gateway decision also applies fail-closed when the local judge is unavailable,
+    # so it can block grey-zone attacks that the layer scores alone would only send to the judge.
+    rows.append({"layers": "full gateway (actual decisions)",
+                 "attacks_blocked": sum(r["decision"] == "BLOCK" for r in attacks), "attacks_to_llm": 0,
+                 "legit_blocked": sum(r["decision"] == "BLOCK" for r in legit), "legit_to_llm": 0})
     ms = sorted(r["ms"] for r in attacks + legit)
     return {"attacks": len(attacks), "legit": len(legit), "table": rows,
-            "missed": [r["text"] for r in attacks if score(r, full) < block],
-            "false_blocks": [r["text"] for r in legit if score(r, full) >= block],
+            "missed": [r["text"] for r in attacks if r["decision"] != "BLOCK"],
+            "false_blocks": [r["text"] for r in legit if r["decision"] == "BLOCK"],
             "latency_ms": {"p50": round(ms[len(ms) // 2]), "p95": round(ms[int(len(ms) * 0.95)])}}
 
 

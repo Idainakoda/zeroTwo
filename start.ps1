@@ -53,7 +53,7 @@ if ($startEngine) {
     Start-Process "$PSHOME\powershell.exe" -WorkingDirectory "$Root\security-engine" -ArgumentList @(
         "-NoExit", "-Command",
         # Restarts automatically if the engine ever stops; close the window to stop it for good.
-        "`$Host.UI.RawUI.WindowTitle='CyberCup security engine (keep this window open)'; while (`$true) { & '$venvPython' -m uvicorn app.main:app --host $bindHost --port 8000; Write-Host 'Security engine stopped - restarting in 3 seconds. Close this window to stop it.' -ForegroundColor Yellow; Start-Sleep 3 }")
+        "`$Host.UI.RawUI.WindowTitle='CyberCup security engine (keep this window open)'; while (`$true) { if (Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue) { Start-Sleep 5; continue }; & '$venvPython' -m uvicorn app.main:app --host $bindHost --port 8000; Write-Host 'Security engine stopped - restarting in 3 seconds. Close this window to stop it.' -ForegroundColor Yellow; Start-Sleep 3 }")
     $waitFor += @{Name = "security engine"; Port = 8000}
 }
 
