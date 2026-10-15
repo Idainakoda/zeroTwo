@@ -42,6 +42,9 @@ USE_ML_INJECTION = _bool("USE_ML_INJECTION", True)
 USE_CLASSIFIER = _bool("USE_CLASSIFIER", True)
 SEMANTIC_MODEL = os.getenv("SEMANTIC_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 CLASSIFIER_MODEL = os.getenv("CLASSIFIER_MODEL", "protectai/deberta-v3-base-prompt-injection-v2")
+# Optional immutable Hugging Face commit hashes for reproducible deployments.
+SEMANTIC_REVISION = os.getenv("SEMANTIC_REVISION") or None
+CLASSIFIER_REVISION = os.getenv("CLASSIFIER_REVISION") or None
 # Cosine-similarity calibration for the semantic layer.
 SEM_LOW = float(os.getenv("SEM_LOW", "0.55"))
 SEM_HIGH = float(os.getenv("SEM_HIGH", "0.85"))

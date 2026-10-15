@@ -97,10 +97,11 @@ class DocumentStore:
             docs = [d for d in (_parse(p) for p in sorted(DOCS_DIR.glob("*.md"))) if d]
             self.docs = {d.id: d for d in docs}
             self.chunks = [c for d in docs for c in d.chunks]
-            if ml.ready and self.chunks:
+            self.vectors = None
+            if ml.embedder is not None and self.chunks:
                 self.vectors = ml.embedder.encode([f"{c.title}. {c.text}" for c in self.chunks],
                                                   normalize_embeddings=True, show_progress_bar=False, convert_to_tensor=True)
-            log.info("RAG store: %d documents, %d chunks (semantic=%s)", len(docs), len(self.chunks), ml.ready)
+            log.info("RAG store: %d documents, %d chunks (semantic=%s)", len(docs), len(self.chunks), ml.embedder is not None)
 
     @staticmethod
     def can_access(chunk_or_doc, clearance: str, department: str) -> bool:
@@ -199,9 +200,14 @@ def scan_chunk(text: str) -> tuple[str, list[Finding], bool]:
     if score >= 0.45 or indirect:
         return "", inj.findings, True
     data = resolve_overlaps(pii.detect(text) + secrets.detect(text))
+    if any(not f.redactable and f.category == Category.SECRET for f in data):
+        return "", data, True
     to_redact = [f for f in data if f.redactable and f.severity >= 2
                  and f.category in (Category.PII, Category.FINANCIAL, Category.SECRET)]
     clean, _ = redact(text, to_redact, reversible=False)
+    residual = pii.detect(clean) + secrets.detect(clean)
+    if any(f.severity >= 2 for f in residual):
+        return "", data, True
     return clean, to_redact, False
 
 

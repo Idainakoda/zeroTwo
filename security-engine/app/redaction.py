@@ -4,18 +4,26 @@ import threading
 import time
 
 from app import config
+from app.detectors.common import value_hash
 from app.schemas import Finding
 
 
 def resolve_overlaps(findings: list[Finding]) -> list[Finding]:
-    """Where located findings overlap, keep the more severe / more confident one."""
+    """Keep blocking evidence and the complete union of overlapping mask spans.
+
+    Choosing only the most confident inner match can leak the beginning/end of
+    a password or an obfuscated identifier. Redaction handles unions separately.
+    """
     located = [f for f in findings if f.start >= 0]
     unlocated = [f for f in findings if f.start < 0]
-    located.sort(key=lambda f: (-f.severity, -f.confidence, f.start))
+    located.sort(key=lambda f: (f.start, f.end))
     kept: list[Finding] = []
+    seen = set()
     for f in located:
-        if all(f.end <= k.start or f.start >= k.end for k in kept):
+        key = (f.type, f.start, f.end)
+        if key not in seen:
             kept.append(f)
+            seen.add(key)
     kept.sort(key=lambda f: f.start)
     return kept + unlocated
 
@@ -25,7 +33,18 @@ def redact(text: str, findings: list[Finding], reversible: bool = True) -> tuple
 
     The same value always gets the same placeholder, so the AI can still refer to it consistently.
     """
-    targets = sorted((f for f in findings if f.redactable and f.start >= 0), key=lambda f: f.start)
+    targets = sorted((f for f in findings if f.redactable and 0 <= f.start < f.end <= len(text)), key=lambda f: f.start)
+    merged: list[Finding] = []
+    for finding in targets:
+        if merged and finding.start < merged[-1].end:
+            previous = merged.pop()
+            winner = max((previous, finding), key=lambda f: (f.severity, f.confidence, f.end - f.start))
+            start, end = min(previous.start, finding.start), max(previous.end, finding.end)
+            merged.append(winner.model_copy(update={"start": start, "end": end,
+                                                   "value_hash": value_hash(text[start:end])}))
+        else:
+            merged.append(finding)
+    targets = merged
     mapping: dict[str, str] = {}        # placeholder -> original value
     by_value: dict[str, str] = {}       # original value -> placeholder
     counters: dict[str, int] = {}

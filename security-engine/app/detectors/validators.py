@@ -49,6 +49,16 @@ def aadhaar_valid(value: str) -> bool:
     return len(d) == 12 and d[0] not in "01" and len(set(d)) > 1 and verhoeff_valid(d)
 
 
+def iban_valid(value: str) -> bool:
+    value = value.replace(" ", "").upper()
+    if not re.fullmatch(r"[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}", value):
+        return False
+    # ISO 13616 mod-97 check. A checksum is not proof of account ownership.
+    rearranged = value[4:] + value[:4]
+    digits = "".join(str(ord(ch) - 55) if ch.isalpha() else ch for ch in rearranged)
+    return int(digits) % 97 == 1
+
+
 def vid_valid(value: str) -> bool:
     d = digits_only(value)
     return len(d) == 16 and verhoeff_valid(d)

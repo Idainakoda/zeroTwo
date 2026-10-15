@@ -132,9 +132,11 @@ public class PolicyDecisionService {
                 action = a;
             }
         }
-        if (residual && rank(action) < rank("BLOCK") && !"ALLOW".equals(action) && !"WARN".equals(action)) {
+        // Engine safety failures cannot be weakened by an ALLOW/WARN policy.
+        if (residual || "BLOCK".equals(analysis.get("decision"))) {
             action = "BLOCK";
-            policies.add("Residual sensitive data after masking -> BLOCK");
+            policies.add(residual ? "Residual sensitive data after masking -> BLOCK"
+                    : "Security engine safety decision -> BLOCK");
         }
         return new Decision(action, new ArrayList<>(types), policies, notes);
     }

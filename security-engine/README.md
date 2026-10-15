@@ -2,6 +2,9 @@
 
 This is the Python security engine from the team's architecture. Spring Boot calls it **before** a prompt goes to the external AI and **after** the AI answers. It returns findings and an `ALLOW` / `SANITIZE` / `BLOCK` recommendation. Spring Boot then applies the organisation's policy and stores the `audit` record in MySQL.
 
+Current robustness behavior, supported obfuscations, offline tests and model
+limitations are documented in [Data protection](../docs/03_DATA_PROTECTION.md).
+
 ```
 Employee → Spring Boot ──POST /v1/analyze/prompt──▶ Engine
                          ◀── decision + sanitized_prompt + system_prompt_addon + audit
@@ -45,7 +48,7 @@ copy .env.example .env
 
 API docs: http://localhost:8000/docs · Health: http://localhost:8000/health
 
-**Local Llama (optional but recommended):** install Ollama from ollama.com, then run `ollama pull llama3.2:3b`. If Ollama isn't running, the engine still works with rules only, and `/health` shows `reachable: false`.
+**Local Llama (optional but recommended):** install Ollama from ollama.com, then run `ollama pull llama3.2:3b`. Rules continue operating when it is unavailable, but possible confidential business content and unresolved suspicious input fail closed. `/health` checks that the configured model is installed and reports missing enabled layers as `degraded`.
 
 ## API
 

@@ -1,6 +1,7 @@
 """Credential and secret detection: known key formats, password assignments and entropy."""
 import re
 
+from app.detectors.canonical import canonicalize
 from app.detectors.common import inside_placeholder, preview, shannon_entropy, value_hash
 from app.schemas import Category, Finding
 
@@ -19,6 +20,7 @@ KEY_PATTERNS = [
     ("STRIPE_KEY", r"\b(?:sk|rk|pk)_(?:live|test)_[0-9A-Za-z]{20,}", 4, 0.97, True),
     ("RAZORPAY_KEY", r"\brzp_(?:live|test)_[0-9A-Za-z]{10,}", 4, 0.97, True),
     ("JWT", r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}", 3, 0.93, True),
+    ("AUTHORIZATION_TOKEN", r"(?i)\b(?:authorization\s*[:=]\s*['\"]?\s*(?:bearer|basic)|bearer)\s+([A-Za-z0-9._~+/=\-]{4,})", 4, 0.96, True),
     ("BASIC_AUTH_CREDENTIALS", r"(?:\s-u|--user)\s+['\"]?[^\s:'\"]+:([^\s'\"]{4,})", 4, 0.95, True),
     ("URL_CREDENTIALS", r"\bhttps?://[^\s:/@]+:([^\s@/]{3,})@", 4, 0.95, True),
     ("CONNECTION_STRING", r"\b(?:mysql|postgres(?:ql)?|mongodb(?:\+srv)?|redis|amqp|mssql|jdbc:[a-z]+)://[^\s:/@]+:[^\s@]+@[^\s]+", 4, 0.97, True),
@@ -26,31 +28,27 @@ KEY_PATTERNS = [
 _COMPILED = [(t, re.compile(p), s, c, r) for t, p, s, c, r in KEY_PATTERNS]
 
 # Key names such as password, DB_PASSWORD, JWT_SECRET, spring.datasource.password, dbPassword, "api_key":
-SECRET_WORD = (r"password|passwd|pwd|passcode|pass|secret|token|api[_\-]?key|access[_\-]?key|private[_\-]?key|"
-               r"auth[_\-]?key|secret[_\-]?key|client[_\-]?secret|credentials?|pin")
+SECRET_WORD = (r"password|passwd|pwd|passcode|pass|secret|token|api[ _\-]?key|access[ _\-]?key|private[ _\-]?key|"
+               r"auth[ _\-]?key|secret[ _\-]?key|client[ _\-]?secret|credentials?|pin|पासवर्ड")
+KEY_NAME = (r"(?<![A-Za-z0-9])((?:[A-Za-z0-9]{1,40}[_\-.]){0,4}(?-i:[a-z][a-z0-9]{0,30})?"
+            rf"(?:{SECRET_WORD})(?:[_\-.][A-Za-z0-9]{{1,30}}){{0,3}})(?![A-Za-z0-9])")
+ASSIGNMENT = r"['\"]?[ \t]*(?:=>|:=|:-|:(?!:)|=(?!=)|\bis\b|\bwas\b|\bhai\b|है)[ \t]*"
+QUOTED_ASSIGN = re.compile(r"(?i)" + KEY_NAME + ASSIGNMENT
+                          + r"(?P<quote>['\"`])(?P<value>(?:\\.|[^\n]){1,1024}?)(?P=quote)")
 PASSWORD_ASSIGN = re.compile(
-    r"(?i)(?<![A-Za-z0-9])((?:[A-Za-z0-9]+[_\-.]|(?-i:[a-z0-9]+(?=[A-Z])))*"
-    rf"(?:{SECRET_WORD})(?:[_\-.][A-Za-z0-9]+)*)(?![A-Za-z0-9])"
-    r"['\"]?\s*(?:[:=]|=>|:=|is|was|hai|:-)\s*['\"`]?([^\s'\"`,;]{4,})"
+    r"(?i)" + KEY_NAME + ASSIGNMENT + r"([^\s'\"`,;]+)"
 )
 PASSWORD_WORDS = re.compile(r"(?i)pass|pwd|pin")
 PLACEHOLDER_VALUES = re.compile(
     r"^(?:\*+|x+|\.+|<[^>]*>|\{[^}]*\}|\$\{?[A-Z_]+\}?|%[A-Z_]+%|your[_\-]?\w*|changeme|example\w*|"
-    r"password|secret|token|none|null|empty|required|incorrect|wrong|expired|invalid|not|reset|forgotten|"
-    r"strong|weak|correct|same|different|case|sensitive|mandatory|optional|os\.environ.*|env\(.*|getenv.*|process\.env.*)$",
+    r"none|null|empty|required|incorrect|wrong|expired|invalid|not|reset|forgotten|"
+    r"strong|weak|secure|insecure|good|bad|hashed|encrypted|protected|stored|used|a|an|the|correct|same|different|case|sensitive|mandatory|optional|os\.environ.*|env\(.*|getenv.*|process\.env.*)$",
     re.I,
 )
 ENTROPY_CANDIDATE = re.compile(r"(?<![A-Za-z0-9+/_\-])[A-Za-z0-9+/_\-]{24,}={0,2}(?![A-Za-z0-9+/_\-])")
 
 
-def _strong_value(value: str) -> bool:
-    has_digit = any(ch.isdigit() for ch in value)
-    has_symbol = any(not ch.isalnum() for ch in value)
-    mixed_case = any(ch.isupper() for ch in value) and any(ch.islower() for ch in value)
-    return has_digit or has_symbol or mixed_case
-
-
-def detect(text: str) -> list[Finding]:
+def _detect_canonical(text: str) -> list[Finding]:
     findings: list[Finding] = []
     taken: list[tuple[int, int]] = []
 
@@ -71,19 +69,24 @@ def detect(text: str) -> list[Finding]:
                 preview=preview(value[:12], 2) + ("…" if len(value) > 12 else ""), value_hash=value_hash(value),
             ))
 
-    for m in PASSWORD_ASSIGN.finditer(text):
-        s, e = m.span(2)
-        value = m.group(2)
-        if overlaps(s, e) or inside_placeholder(text, s, e) or PLACEHOLDER_VALUES.match(value):
+    # Quoted literals take precedence, so spaces and punctuation inside a password
+    # are masked in full. Low entropy does not make a labelled password safe.
+    for m in list(QUOTED_ASSIGN.finditer(text)) + list(PASSWORD_ASSIGN.finditer(text)):
+        quoted = "value" in m.re.groupindex
+        group = "value" if quoted else 2
+        s, e = m.span(group)
+        value = m.group(group)
+        if inside_placeholder(text, s, e) or PLACEHOLDER_VALUES.match(value):
+            continue
+        if overlaps(s, e) and not quoted:
             continue
         # Code like `password = user_input` or `token = request.headers.get(` is not a secret.
-        if re.search(r"[()\[\]]", value) or re.fullmatch(r"[A-Za-z_][A-Za-z_.]*", value):
+        if not quoted and (re.match(r"(?:input|getpass|hash_password|generate_password)\(", value)
+                           or re.fullmatch(r"(?:user_input|input_value|request\..*|process\..*|config\..*|self\..*)", value)):
             continue
         key = m.group(1)
         if re.search(r"(?i)pin[_\-.]?code|pincode|token[_\-.]?(?:count|limit|length|type|url|endpoint)", key):
             continue                                   # postal PIN codes, token limits, ...
-        if not _strong_value(value):
-            continue
         taken.append((s, e))
         findings.append(Finding(
             category=Category.SECRET, type="PASSWORD" if PASSWORD_WORDS.search(key) else "SECRET_VALUE",
@@ -114,4 +117,16 @@ def detect(text: str) -> list[Finding]:
             preview=preview(value[:12], 2) + "…", value_hash=value_hash(value),
             reason=f"random-looking token, entropy {entropy:.1f} bits/char",
         ))
+    return findings
+
+
+def detect(text: str) -> list[Finding]:
+    view = canonicalize(text)
+    findings = _detect_canonical(view.text)
+    for finding in findings:
+        finding.start, finding.end = view.original_span(finding.start, finding.end)
+        value = text[finding.start:finding.end]
+        finding.value_hash = value_hash(value)
+        # Secrets never expose suffixes: those can be useful authentication data.
+        finding.preview = "********"
     return findings

@@ -6,6 +6,7 @@ manages to fool the model, the rule-based result still stands.
 """
 import json
 import logging
+import math
 
 import httpx
 
@@ -37,14 +38,35 @@ async def is_available() -> bool:
     try:
         async with httpx.AsyncClient(timeout=2) as client:
             r = await client.get(f"{config.OLLAMA_URL}/api/tags")
-            return r.status_code == 200
-    except httpx.HTTPError:
+            r.raise_for_status()
+            expected = config.OLLAMA_MODEL if ":" in config.OLLAMA_MODEL else config.OLLAMA_MODEL + ":latest"
+            return any(model.get("name", model.get("model")) == expected for model in r.json().get("models", []))
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return False
+
+
+def parse_verdict(content: str) -> LlmVerdict:
+    """Reject coerced booleans, missing fields, NaN and out-of-range risks."""
+    data = json.loads(content)
+    if not isinstance(data, dict):
+        raise ValueError("expected an object")
+    if any(type(data.get(key)) is not bool for key in ("prompt_injection", "confidential_business_context")):
+        raise ValueError("verdict flags must be JSON booleans")
+    risk = data.get("risk")
+    if type(risk) not in (int, float) or not math.isfinite(risk) or not 0 <= risk <= 1:
+        raise ValueError("risk must be a finite number from zero to one")
+    if not isinstance(data.get("reason"), str):
+        raise ValueError("reason must be text")
+    return LlmVerdict(called=True, available=True, injection=data["prompt_injection"],
+                      confidential_context=data["confidential_business_context"], risk=risk,
+                      reason=data["reason"][:200])
 
 
 async def analyze(text: str) -> LlmVerdict:
     if not config.USE_LLM:
         return LlmVerdict(called=False, available=False, reason="local LLM disabled")
+    if len(text) > 6000:
+        return LlmVerdict(called=False, available=False, reason="message exceeds local review limit")
     payload = {
         "model": config.OLLAMA_MODEL,
         "stream": False,
@@ -52,7 +74,7 @@ async def analyze(text: str) -> LlmVerdict:
         "options": {"temperature": 0, "num_predict": 120},
         "messages": [
             {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": f"<<MESSAGE>>\n{text[:6000]}\n<</MESSAGE>>"},
+            {"role": "user", "content": f"<<MESSAGE>>\n{text}\n<</MESSAGE>>"},
         ],
     }
     try:
@@ -60,15 +82,7 @@ async def analyze(text: str) -> LlmVerdict:
             r = await client.post(f"{config.OLLAMA_URL}/api/chat", json=payload)
             r.raise_for_status()
             content = r.json()["message"]["content"]
-        data = json.loads(content)
-        return LlmVerdict(
-            called=True,
-            available=True,
-            injection=bool(data.get("prompt_injection")),
-            confidential_context=bool(data.get("confidential_business_context")),
-            risk=max(0.0, min(1.0, float(data.get("risk", 0)))),
-            reason=str(data.get("reason", ""))[:200],
-        )
-    except (httpx.HTTPError, KeyError, ValueError, json.JSONDecodeError) as exc:
+        return parse_verdict(content)
+    except (httpx.HTTPError, KeyError, ValueError, TypeError, AttributeError) as exc:
         log.warning("Local LLM analysis failed: %s", exc)
         return LlmVerdict(called=True, available=False, reason=f"local LLM unavailable ({type(exc).__name__})")

@@ -10,7 +10,6 @@ to rules only and /health reports it.
 """
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,8 +19,27 @@ from app import config
 log = logging.getLogger(__name__)
 LIBRARY = Path(__file__).resolve().parent / "attack_library.json"
 
-# Long prompts are split so an attack sentence hidden in a long text is not diluted.
-SENTENCE_SPLIT = re.compile(r"(?<=[.!?।])\s+|\n+")
+def token_windows(text: str, tokenizer, max_tokens: int, overlap: int = 48) -> list[str]:
+    """Cover the entire input with overlapping windows, before model truncation.
+
+    Fast-tokenizer offsets keep original characters intact. No first-N windows
+    limit: batching limits memory without silently dropping the end of a prompt.
+    """
+    if not text.strip():
+        return []
+    budget = max(16, min(max_tokens, 512) - tokenizer.num_special_tokens_to_add(pair=False))
+    offsets = tokenizer(text, add_special_tokens=False, truncation=False,
+                        return_offsets_mapping=True)["offset_mapping"]
+    if not offsets:
+        return []
+    step = max(1, budget - min(overlap, budget // 4))
+    windows = []
+    for start in range(0, len(offsets), step):
+        end = min(len(offsets), start + budget)
+        windows.append(text[offsets[start][0]:offsets[end - 1][1]])
+        if end == len(offsets):
+            break
+    return windows
 
 
 def _mostly_latin(text: str) -> bool:
@@ -52,7 +70,7 @@ class _MlInjection:
 
     @property
     def ready(self) -> bool:
-        return self.embedder is not None
+        return self.embedder is not None or self.classifier is not None
 
     def load(self) -> None:
         if not config.USE_ML_INJECTION or self.ready:
@@ -62,7 +80,7 @@ class _MlInjection:
             from sentence_transformers import SentenceTransformer
 
             torch.set_num_threads(max(1, min(4, torch.get_num_threads())))
-            self.embedder = SentenceTransformer(config.SEMANTIC_MODEL, device="cpu")
+            self.embedder = SentenceTransformer(config.SEMANTIC_MODEL, device="cpu", revision=config.SEMANTIC_REVISION)
             lib = json.loads(LIBRARY.read_text(encoding="utf-8"))
             attacks = [(label, text) for label, items in lib["attacks"].items() for text in items]
             self.attack_labels = [label for label, _ in attacks]
@@ -75,27 +93,18 @@ class _MlInjection:
             self.embedder = None
             self.error = f"semantic: {exc}"
             log.warning("Semantic layer unavailable: %s", exc)
-            return
         if config.USE_CLASSIFIER:
             try:
                 from transformers import pipeline
 
                 self.classifier = pipeline("text-classification", model=config.CLASSIFIER_MODEL,
+                                           revision=config.CLASSIFIER_REVISION,
                                            truncation=True, max_length=512, device=-1)
                 log.info("Injection classifier loaded")
             except Exception as exc:  # pragma: no cover
                 self.classifier = None
                 self.error = f"classifier: {exc}"
                 log.warning("Injection classifier unavailable: %s", exc)
-
-    @staticmethod
-    def _segments(text: str) -> list[str]:
-        parts = [p.strip() for p in SENTENCE_SPLIT.split(text) if len(p.strip()) > 3]
-        if len(parts) <= 1:
-            return [text.strip()]
-        # whole text + each sentence + sliding pairs of sentences
-        pairs = [f"{a} {b}" for a, b in zip(parts, parts[1:])]
-        return [text.strip()] + parts[:30] + pairs[:30]
 
     @staticmethod
     def _calibrate(attack_sim: float, benign_sim: float) -> float:
@@ -107,7 +116,7 @@ class _MlInjection:
         lo, hi = config.SEM_LOW, config.SEM_HIGH
         if attack_sim <= lo:
             return 0.0
-        score = 0.3 + 0.65 * min(1.0, (attack_sim - lo) / (hi - lo))
+        score = 0.3 + 0.65 * min(1.0, (attack_sim - lo) / max(0.001, hi - lo))
         if benign_sim >= attack_sim - config.SEM_BENIGN_MARGIN:
             score *= 0.5
         return round(score, 3)
@@ -117,37 +126,42 @@ class _MlInjection:
         result = MlResult()
         if not self.ready:
             return result
-        from sentence_transformers import util
+        if self.embedder is not None:
+            from sentence_transformers import util
 
-        t = time.perf_counter()
-        segments = []
-        for text in texts:
-            segments.extend(self._segments(text))
-        vecs = self.embedder.encode(segments, normalize_embeddings=True, show_progress_bar=False, convert_to_tensor=True)
-        att = util.cos_sim(vecs, self.attack_vecs)        # segments x attacks
-        ben = util.cos_sim(vecs, self.benign_vecs)        # segments x benign
-        best = 0.0
-        for i in range(len(segments)):
-            j = int(att[i].argmax())
-            a, b = float(att[i][j]), float(ben[i].max())
-            s = self._calibrate(a, b)
-            if s > best or (best == 0 and a > result.nearest_attack):
-                result.nearest_attack, result.nearest_benign = round(a, 3), round(b, 3)
-                if s > best:
-                    best, result.semantic_label = s, self.attack_labels[j]
-        result.semantic = best
-        result.ms["semantic"] = round((time.perf_counter() - t) * 1000, 2)
+            t = time.perf_counter()
+            segments = [window for text in texts for window in token_windows(
+                text, self.embedder.tokenizer, self.embedder.max_seq_length)]
+            best = 0.0
+            for offset in range(0, len(segments), 16):
+                batch = segments[offset:offset + 16]
+                vecs = self.embedder.encode(batch, normalize_embeddings=True, show_progress_bar=False, convert_to_tensor=True)
+                att = util.cos_sim(vecs, self.attack_vecs)
+                ben = util.cos_sim(vecs, self.benign_vecs)
+                for i in range(len(batch)):
+                    j = int(att[i].argmax())
+                    a, b = float(att[i][j]), float(ben[i].max())
+                    s = self._calibrate(a, b)
+                    if s > best or (best == 0 and a > result.nearest_attack):
+                        result.nearest_attack, result.nearest_benign = round(a, 3), round(b, 3)
+                        if s > best:
+                            best, result.semantic_label = s, self.attack_labels[j]
+            result.semantic = best
+            result.ms["semantic"] = round((time.perf_counter() - t) * 1000, 2)
 
         # The classifier was trained on English only; on Devanagari text it misfires, so
         # Hindi-script prompts rely on the multilingual semantic layer and the rules.
-        if self.classifier is not None and _mostly_latin(texts[0]):
+        if self.classifier is not None:
             t = time.perf_counter()
-            clf_inputs = [texts[0][:2000]] + [s for s in segments[1:] if len(s) > 20][:8]
+            clf_inputs = [window for text in texts
+                          for window in token_windows(text, self.classifier.tokenizer, 512)
+                          if _mostly_latin(window)]
             probs = []
-            for out in self.classifier(clf_inputs, batch_size=8):
-                p = out["score"] if out["label"].upper() == "INJECTION" else 1 - out["score"]
-                probs.append(p)
-            result.classifier = round(max(probs), 3)
+            for offset in range(0, len(clf_inputs), 8):
+                for out in self.classifier(clf_inputs[offset:offset + 8], batch_size=8):
+                    p = out["score"] if out["label"].upper() == "INJECTION" else 1 - out["score"]
+                    probs.append(p)
+            result.classifier = round(max(probs, default=0.0), 3)
             result.ms["classifier"] = round((time.perf_counter() - t) * 1000, 2)
         return result
 

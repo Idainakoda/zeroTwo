@@ -34,14 +34,29 @@ def check_key(x_engine_key: str = Header(default="")) -> None:
 
 @app.get("/health")
 async def health():
+    llm_ready = await llm_analyzer.is_available()
+    missing = []
+    if config.USE_PRESIDIO and not pii.presidio.ready:
+        missing.append("presidio")
+    if config.USE_ML_INJECTION and ml.embedder is None:
+        missing.append("semantic")
+    if config.USE_ML_INJECTION and config.USE_CLASSIFIER and ml.classifier is None:
+        missing.append("classifier")
+    if config.USE_LLM and not llm_ready:
+        missing.append("local_llm")
     return {
-        "status": "ok",
+        "status": "degraded" if missing else "ok",
+        "missing_layers": missing,
         "presidio": pii.presidio.ready,
         "presidio_error": pii.presidio.error or None,
-        "ml_injection": {"semantic": ml.ready, "classifier": ml.classifier is not None, "error": ml.error or None},
+        "ml_injection": {"semantic": ml.embedder is not None, "semantic_model": config.SEMANTIC_MODEL,
+                         "semantic_revision": config.SEMANTIC_REVISION,
+                         "classifier": ml.classifier is not None, "classifier_model": config.CLASSIFIER_MODEL,
+                         "classifier_revision": config.CLASSIFIER_REVISION,
+                         "error": ml.error or None},
         "rag_documents": len(rag_store.docs),
         "local_llm": {"enabled": config.USE_LLM, "model": config.OLLAMA_MODEL,
-                      "reachable": await llm_analyzer.is_available()},
+                      "reachable": llm_ready, "model_available": llm_ready},
     }
 
 

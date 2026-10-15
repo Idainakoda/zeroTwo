@@ -1,0 +1,36 @@
+name: Security engine regression
+
+on:
+  push:
+    paths:
+      - 'security-engine/**'
+      - '.github/workflows/security-engine.yml'
+  pull_request:
+    paths:
+      - 'security-engine/**'
+      - '.github/workflows/security-engine.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  data-protection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      USE_LLM: 'false'
+      USE_ML_INJECTION: 'false'
+      USE_PRESIDIO: 'false'
+    defaults:
+      run:
+        working-directory: security-engine
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: security-engine/requirements-test.txt
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m pytest -q tests
+      - run: python -m evaluation.data_protection

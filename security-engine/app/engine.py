@@ -207,6 +207,18 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
                                             reason=llm.reason))
                 decision = Decision.BLOCK
                 reasons.append(f"Local model found confidential business context: {llm.reason}")
+        elif business_hint:
+            # A failed/disabled judge cannot silently clear possible internal data.
+            all_findings.append(Finding(category=Category.CONFIDENTIAL, type="CONFIDENTIAL_REVIEW_REQUIRED",
+                                        severity=3, confidence=0.75, detector="local-review-required",
+                                        reason="local confidential-content review is unavailable"))
+            decision = Decision.BLOCK
+            reasons.append("Possible confidential business content needs local review; the judge is unavailable")
+        elif (grey_injection and not llm.available
+              and not (is_educational(norm.views["clean"]) and inj_score < 0.5
+                       and not ml_findings and not inj.obfuscated and not norm.hidden_chars)):
+            decision = Decision.BLOCK
+            reasons.append("Suspicious input needs local security review; the judge is unavailable")
         if decision != Decision.BLOCK and grey_injection:
             reasons.append(f"Suspicious wording (injection score {inj_score:.2f}); allowed with warning")
 
@@ -225,12 +237,11 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
                             for f in _detect_data(masked))
         residual_inj = injection.scan(normalize(masked)).score >= config.INJECTION_BLOCK
     timing.redact = _ms(t)
-    if decision == Decision.SANITIZE:
-        if residual_risk or residual_inj:
-            decision = Decision.BLOCK
-            reasons.append("Sensitive data remained after redaction; blocked as a precaution")
-        else:
-            sanitized = masked
+    if residual_risk or residual_inj:
+        decision = Decision.BLOCK
+        reasons.append("Sensitive data or an injection remained after redaction; blocked as a precaution")
+    elif decision == Decision.SANITIZE:
+        sanitized = masked
 
     if decision == Decision.ALLOW and not reasons:
         notes = sorted({f.type for f in all_findings})
@@ -247,7 +258,8 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     return PromptAnalysis(
         request_id=request_id, decision=decision, risk_score=risk, injection_score=round(inj_score, 3),
         reasons=reasons, findings=all_findings, sanitized_prompt=sanitized, layer_scores=layer_scores,
-        masked_prompt=masked if not residual_risk else None, residual_risk=residual_risk,
+        masked_prompt=masked if not (residual_risk or residual_inj) else None,
+        residual_risk=residual_risk or residual_inj,
         system_prompt_addon=system_prompt_addon(canary),
         llm=llm, timing_ms=timing, audit=audit,
     )
@@ -302,13 +314,18 @@ def analyze_response(req: ResponseRequest) -> ResponseAnalysis:
     if decision != Decision.BLOCK:
         to_redact = [f for f in foreign if f.redactable and f.severity >= policy.sanitize_min_severity]
         safe, _ = redact(text, to_redact, reversible=False)
-        if to_redact:
+        if any(f.redactable and f.severity >= policy.sanitize_min_severity for f in _detect_data(safe)):
+            decision = Decision.BLOCK
+            reasons.append("Sensitive data remained after response redaction")
+        if to_redact and decision != Decision.BLOCK:
             decision = Decision.SANITIZE
             reasons.append("Sensitive data in the AI's answer was redacted: "
                            + ", ".join(sorted({f.type for f in to_redact})))
-        if req.rehydrate:
+        if decision == Decision.BLOCK:
+            safe = None
+        elif req.rehydrate:
             safe = rehydrate(safe, mapping)
-        else:
+        elif safe is not None:
             safe = re.sub(r"<([A-Z_]+?)_\d+>", r"[REDACTED:\1]", safe)
         if not reasons:
             reasons.append("Response is clean")
@@ -325,19 +342,38 @@ def analyze_document(req: DocumentRequest) -> DocumentAnalysis:
     t = time.perf_counter()
     verdicts: list[ChunkVerdict] = []
     safe_parts: list[str] = []
+    # Inspect one joined view as well: an upload must not evade detection by
+    # splitting a number or password across document chunks.
+    joined = "\n".join(req.chunks)
+    boundaries, offset = [], 0
+    for chunk in req.chunks:
+        boundaries.append((offset, offset + len(chunk)))
+        offset += len(chunk) + 1
+    cross_chunk = [f for f in _detect_data(joined) if f.start >= 0
+                   and any(f.start < end < f.end for _, end in boundaries[:-1])]
     for i, chunk in enumerate(req.chunks):
         norm = normalize(chunk)
         inj = injection.scan(norm)
         score, _, ml_findings, _ = _injection_layers(chunk, norm, inj)
         inj.findings.extend(ml_findings)
         data = _detect_data(chunk)
+        lo, hi = boundaries[i]
+        crossing = [f for f in cross_chunk if f.start < hi and f.end > lo]
+        data.extend(f.model_copy(update={"start": max(f.start, lo) - lo, "end": min(f.end, hi) - lo})
+                    for f in crossing)
         indirect = any(f.type in ("INDIRECT_INJECTION", "DATA_EXFILTRATION") for f in inj.findings)
-        quarantined = score >= DOC_QUARANTINE_SCORE or indirect
-        verdicts.append(ChunkVerdict(index=i, quarantined=quarantined, injection_score=score,
-                                     findings=inj.findings + data))
+        blocked_data = any(f.type in policy.block_types for f in data)
+        business_review = any(f.type == "BUSINESS_CONTEXT_HINT" for f in data)
+        quarantined = score >= DOC_QUARANTINE_SCORE or indirect or blocked_data or business_review or bool(crossing)
+        cleaned = ""
         if not quarantined:
             to_redact = [f for f in data if f.redactable and f.severity >= policy.sanitize_min_severity]
             cleaned, _ = redact(chunk, to_redact, reversible=False)
+            quarantined = any(f.redactable and f.severity >= policy.sanitize_min_severity
+                              for f in _detect_data(cleaned))
+        verdicts.append(ChunkVerdict(index=i, quarantined=quarantined, injection_score=score,
+                                     findings=inj.findings + data))
+        if not quarantined:
             safe_parts.append(f"<<UNTRUSTED_DOCUMENT source={req.source} chunk={i}>>\n{cleaned}\n<</UNTRUSTED_DOCUMENT>>")
     return DocumentAnalysis(chunks=verdicts, quarantined=sum(v.quarantined for v in verdicts),
                             spotlighted_context="\n\n".join(safe_parts), timing_ms=_ms(t))

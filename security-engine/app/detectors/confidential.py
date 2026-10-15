@@ -2,6 +2,7 @@
 internal infrastructure, source code and business-confidential context hints."""
 import re
 
+from app.detectors.canonical import canonicalize
 from app.detectors.common import inside_placeholder, value_hash
 from app.policy import policy
 from app.schemas import Category, Finding
@@ -9,6 +10,7 @@ from app.schemas import Category, Finding
 # Upper-case only, so "keep this secret" in normal English is not a marking.
 MARKING_UPPER = re.compile(r"\b(TOP SECRET|SECRET|CONFIDENTIAL|RESTRICTED|INTERNAL ONLY|STRICTLY CONFIDENTIAL|NOT FOR CIRCULATION|CLASSIFIED)\b")
 MARKING_ANYCASE = re.compile(r"\b(for official use only|fouo|not for public (?:release|circulation)|strictly private and confidential)\b|गोपनीय|अति गोपनीय|गुप्त", re.I)
+MARKING_LABEL = re.compile(r"^\s*(?:classification\s*[:=]\s*)?(?:confidential|restricted|secret|internal only)\s*[:\-]", re.I | re.M)
 
 PRIVATE_IP = re.compile(r"\b(?:10\.\d{1,3}|192\.168|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b")
 INTERNAL_HOST = re.compile(r"\b[a-z0-9\-]+(?:\.[a-z0-9\-]+)*\.(?:internal|corp|intranet|lan|local)\b|\bintranet\.[a-z0-9.\-]+\b", re.I)
@@ -24,17 +26,17 @@ CODE_SIGNALS = re.compile(
 # hints: the local LLM decides whether it is really confidential.
 BUSINESS_HINTS = re.compile(
     r"\b(unreleased|not yet (?:public|announced|released)|under nda|non-disclosure|internal (?:memo|audit|report|financials?|figures)|"
-    r"board (?:meeting|minutes)|quarterly (?:results|numbers) before|merger|acquisition talks|tender (?:bid|amount)|bid amount|"
-    r"salary (?:of|details|slip)|appraisal ratings?|layoffs?|draft (?:policy|budget) not|cabinet note|file noting|"
+    r"board (?:meeting|minutes)|quarterly (?:results|numbers) before|(?:our|planned|pending|unannounced) merger|acquisition talks|tender (?:bid|amount)|bid amount|"
+    r"salary (?:of|details|slip)|appraisal ratings?|(?:planned|unannounced) layoffs?|draft (?:policy|budget) not|cabinet note|file noting|"
     r"internal pricing|price list for|customer list|vendor rates|source code of our|our proprietary)\b",
     re.I,
 )
 
 
-def detect(text: str) -> list[Finding]:
+def _detect_canonical(text: str) -> list[Finding]:
     findings: list[Finding] = []
 
-    for regex in (MARKING_UPPER, MARKING_ANYCASE):
+    for regex in (MARKING_UPPER, MARKING_ANYCASE, MARKING_LABEL):
         for m in regex.finditer(text):
             line_start = text.rfind("\n", 0, m.start()) + 1
             header_like = m.start() - line_start < 5 or text[max(0, m.start() - 1):m.start()] in "[(*#:"
@@ -73,6 +75,16 @@ def detect(text: str) -> list[Finding]:
     if hints:
         findings.append(Finding(
             category=Category.CONFIDENTIAL, type="BUSINESS_CONTEXT_HINT", severity=1, confidence=0.5,
-            detector="keyword-hint", reason="possible confidential business context: " + ", ".join(sorted(hints)[:3]),
+            detector="keyword-hint", reason="possible confidential business context requires local review",
         ))
+    return findings
+
+
+def detect(text: str) -> list[Finding]:
+    view = canonicalize(text)
+    findings = _detect_canonical(view.text)
+    for finding in findings:
+        if finding.start >= 0:
+            finding.start, finding.end = view.original_span(finding.start, finding.end)
+            finding.value_hash = value_hash(text[finding.start:finding.end])
     return findings

@@ -2,7 +2,7 @@
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Decision(str, Enum):
@@ -107,9 +107,16 @@ class ResponseAnalysis(BaseModel):
 
 
 class DocumentRequest(BaseModel):
-    chunks: list[str]
-    source: str = "upload"
+    chunks: list[str] = Field(..., max_length=200)
+    source: str = Field(default="upload", max_length=200)
     user: UserContext = UserContext()
+
+    @field_validator("chunks")
+    @classmethod
+    def limit_document_size(cls, chunks):
+        if sum(map(len, chunks)) > 200_000:
+            raise ValueError("document exceeds the 200000-character inspection limit")
+        return chunks
 
 
 class ChunkVerdict(BaseModel):
