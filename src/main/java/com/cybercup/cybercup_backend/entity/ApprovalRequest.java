@@ -28,8 +28,9 @@ public class ApprovalRequest {
     @Column(length = 60)
     private String department;
 
+    // Explicit length: with the default (255) MySQL creates TINYTEXT and longer prompts fail to save.
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, length = 1_000_000)
     private String maskedPrompt;
 
     // Attached-document context, already scanned and redacted by the engine

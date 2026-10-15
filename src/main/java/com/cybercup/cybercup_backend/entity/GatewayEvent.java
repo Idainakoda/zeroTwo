@@ -66,6 +66,11 @@ public class GatewayEvent {
 
     private Long totalMs;
 
+    // The prompt as stored for review: personal data and secrets replaced by placeholders
+    // such as <AADHAAR_1>. Never the raw text (gateway.store-prompts=NONE disables it).
+    @Lob
+    private String promptText;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -111,5 +116,7 @@ public class GatewayEvent {
     public void setLlmMs(Long llmMs) { this.llmMs = llmMs; }
     public Long getTotalMs() { return totalMs; }
     public void setTotalMs(Long totalMs) { this.totalMs = totalMs; }
+    public String getPromptText() { return promptText; }
+    public void setPromptText(String promptText) { this.promptText = promptText; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

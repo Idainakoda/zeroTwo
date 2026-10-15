@@ -6,6 +6,7 @@ import {
   FlaskConical,
   History,
   LogOut,
+  MessagesSquare,
   MessageSquareLock,
   ScrollText,
   ShieldAlert,
@@ -22,6 +23,7 @@ const EMPLOYEE_LINKS = [
 
 const MONITOR_LINKS = [
   { to: "/admin", label: "Overview", icon: BarChart3, end: true },
+  { to: "/admin/prompts", label: "Prompt Log", icon: MessagesSquare },
   { to: "/admin/incidents", label: "Incidents", icon: ShieldAlert },
   { to: "/admin/approvals", label: "Approvals", icon: ClipboardCheck },
   { to: "/admin/audit", label: "Audit Log", icon: ScrollText },

@@ -13,6 +13,7 @@ import AuditLogsPage from "../pages/AuditLogsPage";
 import PoliciesPage from "../pages/PoliciesPage";
 import UsersPage from "../pages/UsersPage";
 import EvaluationPage from "../pages/EvaluationPage";
+import PromptLogPage from "../pages/PromptLogPage";
 import { homeFor } from "../utils/routing";
 
 function RequireAuth({ children, roles }) {
@@ -46,6 +47,7 @@ export default function AppRoutes() {
         <Route path="/documents" element={<DocumentsPage />} />
 
         <Route path="/admin" element={<RequireAuth roles={MONITOR}><AdminDashboardPage /></RequireAuth>} />
+        <Route path="/admin/prompts" element={<RequireAuth roles={MONITOR}><PromptLogPage /></RequireAuth>} />
         <Route path="/admin/incidents" element={<RequireAuth roles={MONITOR}><IncidentsPage /></RequireAuth>} />
         <Route path="/admin/approvals" element={<RequireAuth roles={MONITOR}><ApprovalsPage /></RequireAuth>} />
         <Route path="/admin/audit" element={<RequireAuth roles={MONITOR}><AuditLogsPage /></RequireAuth>} />

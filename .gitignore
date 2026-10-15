@@ -38,3 +38,6 @@ data/
 *.log
 node_modules/
 tools/
+
+# generated locally, contains the DB password
+local-mysql-setup.sql

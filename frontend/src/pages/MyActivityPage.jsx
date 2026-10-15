@@ -26,7 +26,7 @@ export default function MyActivityPage() {
   return (
     <div>
       <PageHeader eyebrow="My activity" title="Your requests"
-        text="What the gateway did with each of your messages. Only metadata is kept: the text of your prompts is never stored." />
+        text="What the gateway did with each of your messages. Prompts are stored only in masked form: personal data and secrets are replaced by placeholders before anything is saved." />
       <ErrorBox message={error} />
 
       <Card className="mb-6">
@@ -68,10 +68,10 @@ export default function MyActivityPage() {
           <EmptyState title="No requests yet" text="Use the Secure Assistant to send your first message." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[860px] text-left text-sm">
               <thead className="text-[11px] uppercase tracking-wide text-slate-500">
                 <tr>
-                  {["Time", "Decision", "Detected", "Documents", "Answer", "Time taken"].map((h) => (
+                  {["Time", "Prompt (as stored)", "Decision", "Detected", "Documents", "Answer", "Time taken"].map((h) => (
                     <th key={h} className="border-b border-white/10 px-3 py-2 font-medium">{h}</th>
                   ))}
                 </tr>
@@ -80,6 +80,9 @@ export default function MyActivityPage() {
                 {history.map((e) => (
                   <tr key={e.id} className="border-b border-white/5">
                     <td className="px-3 py-3 text-xs text-slate-400">{formatDateTime(e.createdAt)}</td>
+                    <td className="max-w-[320px] px-3 py-3 text-xs text-slate-300">
+                      <p className="line-clamp-3 whitespace-pre-wrap break-words">{e.promptText || <span className="text-slate-600">Not stored</span>}</p>
+                    </td>
                     <td className="px-3 py-3"><StatusBadge action={e.action} /></td>
                     <td className="px-3 py-3 text-xs text-slate-300">
                       {splitList(e.findingTypes).map(typeLabel).join(", ") || <span className="text-slate-600">Nothing sensitive</span>}

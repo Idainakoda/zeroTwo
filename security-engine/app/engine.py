@@ -299,7 +299,9 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     return PromptAnalysis(
         request_id=request_id, decision=decision, risk_score=risk, injection_score=round(inj_score, 3),
         reasons=reasons, findings=all_findings, sanitized_prompt=sanitized, layer_scores=layer_scores,
-        masked_prompt=masked if not (residual_risk or residual_inj) else None,
+        # Withheld only when sensitive data is still visible after masking. A prompt that remains an
+        # injection is safe to keep for review (it is blocked by safety_block, never forwarded).
+        masked_prompt=masked if not residual_risk else None,
         residual_risk=residual_risk or residual_inj, safety_block=safety_block,
         system_prompt_addon=system_prompt_addon(canary),
         llm=llm, timing_ms=timing, audit=audit,

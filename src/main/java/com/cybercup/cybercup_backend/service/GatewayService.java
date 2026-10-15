@@ -43,11 +43,16 @@ public class GatewayService {
     private final AuditLogService audit;
     private final JsonMapper json;
     private final int externalMaxLevel;
+    // MASKED = store the prompt with personal data and secrets replaced by placeholders; NONE = metadata only.
+    // The raw prompt is never stored.
+    private final boolean storeMaskedPrompts;
 
     public GatewayService(EngineClient engine, LlmClient llm, PolicyDecisionService policies, UserRepository users,
                           GatewayEventRepository events, IncidentRepository incidents,
                           ApprovalRequestRepository approvals, AuditLogService audit, JsonMapper json,
-                          @Value("${gateway.external-max-classification:CONFIDENTIAL}") String externalMax) {
+                          @Value("${gateway.external-max-classification:CONFIDENTIAL}") String externalMax,
+                          @Value("${gateway.store-prompts:MASKED}") String storePrompts) {
+        this.storeMaskedPrompts = !"NONE".equalsIgnoreCase(storePrompts.trim());
         this.engine = engine;
         this.llm = llm;
         this.policies = policies;
@@ -359,6 +364,12 @@ public class GatewayService {
         ev.setEngineMs(timing.get("engineMs"));
         ev.setLlmMs(timing.get("llmMs"));
         ev.setTotalMs(timing.get("totalMs"));
+        if (storeMaskedPrompts) {
+            Object masked = a.get("masked_prompt");
+            ev.setPromptText(masked == null
+                    ? "[not stored: sensitive data in this prompt could not be masked safely]"
+                    : String.valueOf(masked));
+        }
         events.save(ev);
 
         String severity = switch (action) {

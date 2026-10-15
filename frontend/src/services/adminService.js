@@ -4,6 +4,10 @@ export function getDashboardStats(token, days = 7) {
   return apiRequest(`/api/dashboard/stats?days=${days}`, { token });
 }
 
+export function getPromptLog(token) {
+  return apiRequest("/api/dashboard/prompts", { token });
+}
+
 export function getIncidents(token) {
   return apiRequest("/api/incidents", { token });
 }
