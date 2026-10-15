@@ -9,5 +9,4 @@ public class CybercupBackendApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(CybercupBackendApplication.class, args);
 	}
-
 }
