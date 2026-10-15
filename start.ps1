@@ -33,6 +33,9 @@ $share = [bool]($env:SHARE_ON_NETWORK -and $env:SHARE_ON_NETWORK.Trim().ToLower(
 $bindHost = if ($share) { "0.0.0.0" } else { "127.0.0.1" }
 
 if ($startBackend -and -not $env:JWT_SECRET) { throw "JWT_SECRET is missing. Run setup.ps1 first." }
+if (($startEngine -or $startBackend) -and -not $env:ENGINE_API_KEY) {
+    throw "ENGINE_API_KEY is missing in .env. Run setup.ps1 (two laptops: copy the same key from the other laptop)."
+}
 
 $java = Find-Java
 $node = Find-Node

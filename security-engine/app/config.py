@@ -25,8 +25,10 @@ def _bool(name: str, default: bool) -> bool:
 # Secret used to hash detected values for audit logs. Change it in production.
 HMAC_KEY = os.getenv("ENGINE_HMAC_KEY", "dev-only-change-me").encode()
 
-# Optional shared key that Spring Boot sends in the X-Engine-Key header.
+# Shared key that Spring Boot sends in the X-Engine-Key header. Required: without it the engine
+# refuses requests, unless ENGINE_ALLOW_NO_KEY=true is set explicitly (local tests only).
 API_KEY = os.getenv("ENGINE_API_KEY", "")
+ALLOW_NO_KEY = _bool("ENGINE_ALLOW_NO_KEY", False)
 
 # Presidio NER (person / location names). Falls back to regex-only if unavailable.
 USE_PRESIDIO = _bool("USE_PRESIDIO", True)

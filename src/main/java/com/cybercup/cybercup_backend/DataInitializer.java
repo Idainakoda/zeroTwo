@@ -19,7 +19,9 @@ import java.util.Set;
 @Configuration
 public class DataInitializer {
 
-    @Value("${app.seed-demo:true}")
+    // Demo accounts are an explicit local-demo option (SEED_DEMO_ACCOUNTS=true, written by setup.ps1).
+    // Existing users are never deleted when it is off.
+    @Value("${app.seed-demo:${SEED_DEMO_ACCOUNTS:false}}")
     private boolean seedDemo;
 
     @Bean

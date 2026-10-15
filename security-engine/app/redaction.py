@@ -1,4 +1,5 @@
 """Placeholder redaction and a short-lived vault for putting values back in the AI's answer."""
+import hmac
 import secrets
 import threading
 import time
@@ -87,25 +88,27 @@ class Vault:
         self._data: dict[str, tuple[float, dict]] = {}
         self._lock = threading.Lock()
 
-    def put(self, request_id: str, mapping: dict[str, str], canary: str) -> None:
+    def put(self, request_id: str, mapping: dict[str, str], canary: str, owner: str) -> None:
+        """owner: the verified user the backend sent the prompt for; only they get the values back."""
         with self._lock:
             self._purge()
-            self._data[request_id] = (time.time() + self.ttl_s, {"mapping": mapping, "canary": canary})
+            self._data[request_id] = (time.time() + self.ttl_s,
+                                      {"mapping": mapping, "canary": canary, "owner": owner})
 
-    def get(self, request_id: str) -> dict | None:
+    def pop(self, request_id: str, owner: str) -> dict | None:
+        """One-time use by the owner. Expired entries are gone; a different user gets nothing and
+        cannot consume the owner's entry."""
         with self._lock:
             self._purge()
             item = self._data.get(request_id)
-            return item[1] if item else None
-
-    def pop(self, request_id: str) -> dict | None:
-        with self._lock:
-            item = self._data.pop(request_id, None)
-            return item[1] if item else None
+            if item is None or not hmac.compare_digest(item[1]["owner"], owner):
+                return None
+            del self._data[request_id]
+            return item[1]
 
     def _purge(self) -> None:
         now = time.time()
-        for key in [k for k, (exp, _) in self._data.items() if exp < now]:
+        for key in [k for k, (exp, _) in self._data.items() if exp <= now]:
             del self._data[key]
 
 

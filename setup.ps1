@@ -126,6 +126,26 @@ if ($needBackend -and $envText -notmatch "(?m)^JWT_SECRET=\S+") {
     Set-Content $EnvFile $envText -Encoding ascii -NoNewline
     Write-Host "  Generated a random JWT secret in .env"
 }
+if ($envText -notmatch "(?m)^ENGINE_API_KEY=\S+") {
+    # Shared secret the backend sends to the engine; the engine refuses requests without it.
+    # Two-laptop setup: copy the same value into the other laptop's .env.
+    $bytes = New-Object byte[] 24
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $key = ([Convert]::ToBase64String($bytes)) -replace '[+/=]', ''
+    if ($envText -match "(?m)^ENGINE_API_KEY=") {
+        $envText = $envText -replace "(?m)^ENGINE_API_KEY=.*$", "ENGINE_API_KEY=$key"
+    } else {
+        $envText = $envText.TrimEnd() + "`r`nENGINE_API_KEY=$key`r`n"
+    }
+    Set-Content $EnvFile $envText -Encoding ascii -NoNewline
+    Write-Host "  Generated the engine key (ENGINE_API_KEY) in .env"
+}
+if ($needBackend -and $envText -notmatch "(?m)^SEED_DEMO_ACCOUNTS=") {
+    # Local demo only: creates the four demo accounts shown on the sign-in pages. Set to false elsewhere.
+    $envText = $envText.TrimEnd() + "`r`nSEED_DEMO_ACCOUNTS=true`r`n"
+    Set-Content $EnvFile $envText -Encoding ascii -NoNewline
+    Write-Host "  Demo accounts enabled for this local setup (SEED_DEMO_ACCOUNTS=true in .env)"
+}
 if ($needBackend -and $envText -notmatch "(?m)^GEMINI_API_KEY=\S+") {
     Write-Host "  Optional: paste your Gemini API key into .env (GEMINI_API_KEY=...) to get AI answers."
 }

@@ -88,6 +88,18 @@ RULES: list[InjRule] = [
     InjRule("XU-08", "CROSS_USER_DATA_REQUEST", _r(r"\b(?:conversation|chat|messages|history|prompts|queries|session)s?\s+(?:of|from|with)\s+(?:the\s+)?(?:another|other|previous|last|different|next)\s+(?:user|person|employee|customer|officer)"), 0.7),
     InjRule("XU-06", "CROSS_USER_DATA_REQUEST", _r(rf"\b{OTHERS}\s+(?:\w+\s+){{0,2}}(?:asked|typed|said|wrote|searched|uploaded|sent|requested|submitted|entered)"), 0.7),
     InjRule("XU-05", "CROSS_USER_DATA_REQUEST", _r(r"\b(?:what|which)\s+(?:did|have)\s+(?:other|another)\s+(?:users?|employees?|people)\s+(?:ask|say|type|search|upload)"), 0.75),
+    # Harvesting identifiers the assistant has "seen" or "stored" for other people.
+    InjRule("XU-09", "CROSS_USER_DATA_REQUEST", _r(
+        r"\b(?:retrieve|extract|list|give|show|return|export|dump|collect|compile|print|tell)\b.{0,60}"
+        r"\b(?:aadhaar|aadhar|pans?|phone|mobile|personal|bank|account|identity)\b.{0,60}"
+        r"\b(?:(?:you|you've|you\s+have)\s+(?:have\s+)?(?:seen|stored|processed|received|collected|saved)"
+        r"|stored\s+(?:for|of|about)|(?:from|of|for|by)\s+(?:any|all|every|other)\s+(?:users?|employees?|citizens?|people|staff|applicants?)"
+        r"|in\s+your\s+(?:memory|database|logs|records))"), 0.8),
+
+    # --- Secrets of the deployment itself ---
+    InjRule("SEC-01", "SYSTEM_PROMPT_EXTRACTION", _r(
+        r"\b(?:every|all|any|each)\s+(?:\w+\s+){0,2}?(?:instructions?|secrets?|api\s*keys?|passwords?|credentials?|tokens?)\b.{0,60}"
+        r"\b(?:from|in|of)\s+your\s+(?:setup|configuration|config|system|deployment|environment|instructions|prompt|memory)\b"), 0.8),
 
     # --- Delimiter / chat-template injection ---
     InjRule("DLM-01", "DELIMITER_INJECTION", _r(r"<\|im_start\|>|<\|im_end\|>|<\|system\|>|<\|assistant\|>|\[/?INST\]|<<\s*/?SYS\s*>>|</?\s*system\s*>|<\|begin_of_text\|>|<\|start_header_id\|>"), 0.7),
@@ -129,6 +141,30 @@ EDUCATIONAL = _r(
     r"how (?:to|do i|can i|should i) (?:write|create|design|build|draft|make|structure)|"
     r"examples? of|types of|awareness|training (?:slides|session|material)|research paper|define|definition of|owasp|best practices)\b"
 )
+# Editing instructions about the user's OWN text ("ignore the typos", "forget the earlier draft",
+# "disregard formatting rules") use override verbs; the ML classifier often scores them as attacks.
+BENIGN_EDIT = _r(
+    r"\b(?:ignore|forget|disregard|skip|override|overlook)\s+(?:about\s+)?"
+    r"(?:the\s+|my\s+|any\s+|all\s+(?:the\s+)?|this\s+|that\s+|those\s+|these\s+|our\s+)?(?:\w+\s+){0,2}?"
+    r"(?:typos?|spelling(?:\s+mistakes)?|grammar|formatting(?:\s+rules)?|format|tone|style|font|layout|word\s+limit|"
+    r"(?:earlier|previous|first|last|old|original)\s+(?:version|draft|email|letter|reply|answer|attempt)|"
+    r"(?:first|second|third|last|previous|next|above)\s+(?:paragraph|line|section|point|sentence|page|part)|draft)\b"
+)
+# ...unless the rest of the prompt is about the assistant itself, its secrets or other people's data.
+META_TARGET = _r(
+    r"\b(?:instructions?|rules?|prompts?|system|guidelines?|configur\w*|setup|restrictions?|filters?|polic(?:y|ies)|"
+    r"developers?|secrets?|confidential|hidden|passwords?|api\s*keys?|credentials?|memory|history|conversations?|"
+    r"users?|employees?|before\s+me|guardrails?|safety)\b"
+)
+
+
+def is_benign_edit(text: str) -> bool:
+    """True when the override verbs only target the user's own draft and nothing else looks like a target."""
+    if not BENIGN_EDIT.search(text):
+        return False
+    return not META_TARGET.search(BENIGN_EDIT.sub(" ", text))
+
+
 VIEW_WEIGHT = {"clean": 1.0, "collapsed": 1.0, "leet": 0.95, "decoded": 1.0, "rot13": 0.9, "reversed": 0.9}
 OBFUSCATED_VIEWS = {"collapsed", "leet", "decoded", "rot13", "reversed"}
 

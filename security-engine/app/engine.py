@@ -55,12 +55,32 @@ def is_educational(clean_text: str) -> bool:
     return bool(injection.EDUCATIONAL.search(clean_text)) and not re.search(r"\b(?:your|ur)\b", clean_text)
 
 
-def _injection_layers(text: str, norm, inj, has_maskable: bool = False) -> tuple[float, dict, list[Finding], float]:
+SENTENCE = re.compile(r"[^.!?\n]+[.!?]*")
+
+
+def data_free_text(text: str, findings: list[Finding]) -> str | None:
+    """The prompt without the sentences that carry maskable values, or None if nothing is left.
+
+    Lets the classifier judge the rest of the prompt on its own, so appending "my phone is ..."
+    to an attack cannot lower the attack's score.
+    """
+    spans = [(f.start, f.end) for f in findings if f.start >= 0]
+    if not spans:
+        return None
+    kept = [m.group().strip() for m in SENTENCE.finditer(text)
+            if m.group().strip() and not any(s < m.end() and e > m.start() for s, e in spans)]
+    rest = " ".join(kept)
+    return rest if len(rest.split()) >= 3 else None
+
+
+def _injection_layers(text: str, norm, inj, has_maskable: bool = False,
+                      data_free: str | None = None) -> tuple[float, dict, list[Finding], float]:
     """Runs the ML layers and returns (fused score, per-layer scores, extra findings, ml ms).
 
     has_maskable: the prompt contains personal data / secrets that will be masked. The classifier
-    reacts to such values themselves (a password sentence can score 1.0), so - as on code - it can
-    then only push the prompt into the grey zone, never block it on its own.
+    reacts to such values themselves (a password sentence can score 1.0), so - as on code - its
+    score on the whole prompt is halved. The sentences without those values (data_free) are
+    scored separately and undamped: adding personal data must never weaken an attack.
     """
     if not ml.ready:
         return inj.score, {"rules": inj.score, "semantic": None, "classifier": None, "fused": inj.score}, [], 0.0
@@ -71,8 +91,17 @@ def _injection_layers(text: str, norm, inj, has_maskable: bool = False) -> tuple
     # The classifier often mistakes source code / config snippets for injections, so on
     # code-like text it can only push the prompt into the grey zone (local Llama), not block.
     code = looks_like_code(text)
-    if code or has_maskable:
+    # "Ignore the typos", "forget the earlier draft": override verbs aimed only at the user's own text.
+    benign_edit = injection.is_benign_edit(norm.views["clean"])
+    data_free_score = None
+    if code or has_maskable or benign_edit:
         res.classifier = round(res.classifier * 0.5, 3)
+    if has_maskable and data_free and ml.classifier is not None:
+        data_free_score = ml.analyze([data_free]).classifier
+        if code:
+            data_free_score *= 0.5
+        data_free_score = round(data_free_score, 3)
+        res.classifier = max(res.classifier, data_free_score)
     fused = fuse_injection(inj.score, res.semantic, res.classifier, educational)
     extra: list[Finding] = []
     # On code, weak ML signals are noise; list them only when they could change the decision.
@@ -89,7 +118,8 @@ def _injection_layers(text: str, norm, inj, has_maskable: bool = False) -> tuple
                              detector="deberta-classifier", reason=f"classifier probability {res.classifier:.2f}"))
     layers = {"rules": inj.score, "semantic": res.semantic, "classifier": res.classifier if ml.classifier else None,
               "nearest_attack_similarity": res.nearest_attack, "educational_framing": educational,
-              "code_like": code, "classifier_damped": code or has_maskable, "fused": fused}
+              "code_like": code, "benign_edit": benign_edit, "classifier_damped": code or has_maskable or benign_edit,
+              "classifier_without_data": data_free_score, "fused": fused}
     return fused, layers, extra, _ms(t)
 
 
@@ -99,6 +129,7 @@ def _still_suspicious_without_judge(masked_text: str, layers: dict, inj, norm) -
     The classifier alone (rules and semantic layer quiet) is not enough when:
     - the text is code / config: it is known to misfire there, which is why its score is
       already halved for code;
+    - the only override wording targets the user's own draft ("ignore the typos");
     - the prompt contains values the gateway masks: the classifier reacts to key-like tokens
       and to the <TYPE_n> placeholders themselves (a password prompt scores 0.03, its masked
       copy 0.99), so on such prompts it measures the secret, not an attack.
@@ -108,10 +139,15 @@ def _still_suspicious_without_judge(masked_text: str, layers: dict, inj, norm) -
     semantic = layers.get("semantic") or 0.0
     classifier_only = rules < config.INJECTION_GREY_LOW and semantic < config.INJECTION_GREY_LOW
     has_masked_values = masked_text != norm.original
-    if (classifier_only and (layers.get("code_like") or has_masked_values)
+    # The sentences without any masked value still read as an attack: the values do not explain it.
+    without_data = layers.get("classifier_without_data")
+    attack_outside_data = (without_data is not None
+                           and config.W_CLASSIFIER * without_data >= config.INJECTION_GREY_LOW)
+    if (classifier_only and (layers.get("code_like") or layers.get("benign_edit")
+                             or (has_masked_values and not attack_outside_data))
             and not inj.obfuscated and not norm.hidden_chars):
         return False
-    if has_masked_values:
+    if has_masked_values and not attack_outside_data:
         # Judge what would actually be forwarded, with neutral words instead of placeholder tags.
         neutral = re.sub(r"<[A-Z_]+_\d+>", "value", masked_text)
         masked_norm = normalize(neutral)
@@ -204,10 +240,12 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     t = time.perf_counter()
     inj = injection.scan(norm)
     timing.injection = _ms(t)
-    has_maskable = any(f.redactable and f.severity >= policy.sanitize_min_severity
-                       and f.category in (Category.PII, Category.FINANCIAL, Category.SECRET) for f in findings)
+    maskable = [f for f in findings if f.redactable and f.severity >= policy.sanitize_min_severity
+                and f.category in (Category.PII, Category.FINANCIAL, Category.SECRET)]
+    has_maskable = bool(maskable)
     inj_score, layer_scores, ml_findings, timing.ml = await asyncio.to_thread(
-        _injection_layers, text, norm, inj, has_maskable)
+        _injection_layers, text, norm, inj, has_maskable,
+        data_free_text(text, maskable) if has_maskable else None)
     inj.findings.extend(ml_findings)
 
     # Bulk personal data (e.g. a pasted spreadsheet of citizens) is blocked outright.
@@ -297,7 +335,7 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
         reasons.append("No sensitive data or attack detected" if not notes
                        else f"Low-risk items noted: {', '.join(notes)}")
 
-    vault.put(request_id, mapping, canary)
+    vault.put(request_id, mapping, canary, owner=req.user.user_id)
 
     risk = _risk_score(all_findings, inj_score)
     timing.total = _ms(t_total)
@@ -318,7 +356,7 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
 
 def analyze_response(req: ResponseRequest) -> ResponseAnalysis:
     t = time.perf_counter()
-    entry = vault.pop(req.request_id) if req.request_id else None
+    entry = vault.pop(req.request_id, owner=req.user.user_id) if req.request_id else None
     mapping = entry["mapping"] if entry else {}
     canary = entry["canary"] if entry else None
     text = req.response

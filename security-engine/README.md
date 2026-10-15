@@ -34,6 +34,12 @@ Employee → Spring Boot ──POST /v1/analyze/prompt──▶ Engine
 | 12 | Uploads and OCR | `app/extraction.py` | Text from PDF (PyMuPDF), Word (python-docx) and pictures. Embedded pictures and scanned pages are read with **RapidOCR** (ONNX, CPU, about 1 s per picture). Only document, picture and text types are accepted; `.env`, keys and executables are refused |
 | 13 | Standard documents | `app/detectors/id_documents.py` | Recognises Aadhaar, PAN, passport, voter ID, driving licence, bank statement, cheque, salary slip and Form 16 from printed titles and field labels plus validated identifiers. It works on OCR text without spaces. The evidence lists cue names, never values |
 
+**Access and data-handling safeguards**
+- **Engine key:** the engine only answers requests carrying the shared `ENGINE_API_KEY`, which `setup.ps1` generates. With no key configured it refuses everything, unless `ENGINE_ALLOW_NO_KEY=true` is set explicitly for local tests.
+- **Vault:** masked values are bound to the user who sent the prompt. They expire after `VAULT_TTL_S` and can be used once. Another user's request neither receives them nor uses them up.
+- **Unknown classifications:** a document with an unknown or misspelt classification counts as SECRET. A user with an unknown clearance gets the least access.
+- **Personal data cannot weaken an attack:** the classifier also scores the prompt without the sentences that carry personal data. Adding "my phone is …" to an attack therefore can't lower its score.
+
 The audit record contains **no raw values**: only types, counts, HMAC hashes, rules, decision and timings. Spring Boot should store it in MySQL and chain each row's hash to the previous one (`hash = SHA256(prev_hash + record_json)`) so tampering can be detected.
 
 ## Run it (Windows PowerShell)
@@ -116,6 +122,36 @@ Blind set (unseen wording), what each layer adds:
 | Rules + semantic | 9 / 30 | 12 | 0 / 30 |
 | Rules + classifier | 21 / 30 | 6 | 0 / 30 |
 | **Rules + semantic + classifier** | **25 / 30** | **4** | **0 / 30** |
+
+### Robustness set (demanding prompts in five categories)
+
+`python -m evaluation.robust` runs 100 prompts in five categories:
+- complex instruction following and negative constraints
+- hallucination resistance and fact verification
+- multi-step reasoning
+- structured extraction and transformation
+- adversarial and safety alignment
+
+Each category mixes hard but legitimate work ("do not use bullet points", "ignore the second paragraph", "convert this to JSON", "verify this claim") with attacks written in the same style. `python -m evaluation.robust --holdout` runs a separate 30-prompt set that was written at the same time but never used for tuning. The local judge is off for both.
+
+| Set | Accuracy | Attacks blocked | Legitimate prompts blocked |
+|---|---|---|---|
+| Robustness set, before tuning | 93 % | 37 / 40 | 4 / 60 |
+| Robustness set, after tuning | 99 % | 40 / 40 | 1 / 60 |
+| **Hold-out set (never tuned on)** | **90 %** | **14 / 15** | **2 / 15** |
+
+Tuning added three things:
+- A rule for harvesting stored identifiers ("Aadhaar numbers you have seen from any user").
+- A rule for "every secret / API key from your setup".
+- An exemption for override verbs aimed only at the user's own text ("ignore the typos", "forget the earlier draft"). With it, the classifier alone cannot block those prompts.
+
+No threshold was changed. The development, blind and data-protection results did not move.
+
+Remaining errors, which need the local judge or are out of scope:
+- A request to write example attack phrases for training.
+- "What the finance staff asked you this morning" style requests.
+- A defensive question about hidden instructions in documents.
+- One email draft with several negative constraints.
 
 Honest notes:
 - The first blind run had **2 / 30** legitimate prompts blocked. One was a rule bug (Hinglish "do" matching English "why do"). The other was the English-only classifier misfiring on Hindi script. Both were fixed afterwards, so the 0 / 30 above is no longer fully blind.

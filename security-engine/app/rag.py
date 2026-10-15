@@ -52,7 +52,13 @@ class Doc:
 
 
 def level(name: str) -> int:
-    return LEVELS.get((name or "PUBLIC").upper(), 0)
+    """Level of a document's classification. Unknown or misspelt labels count as SECRET, never PUBLIC."""
+    return LEVELS.get((name or "").strip().upper(), LEVELS["SECRET"])
+
+
+def clearance_level(name: str) -> int:
+    """Level of a user's clearance. Unknown or missing clearances get the least access (PUBLIC)."""
+    return LEVELS.get((name or "").strip().upper(), LEVELS["PUBLIC"])
 
 
 def _parse(path: Path) -> Doc | None:
@@ -105,10 +111,10 @@ class DocumentStore:
 
     @staticmethod
     def can_access(chunk_or_doc, clearance: str, department: str) -> bool:
-        if level(chunk_or_doc.classification) > level(clearance):
+        if level(chunk_or_doc.classification) > clearance_level(clearance):
             return False
         # Department-scoped documents: only listed departments, unless the user holds SECRET clearance.
-        if chunk_or_doc.departments and level(clearance) < LEVELS["SECRET"]:
+        if chunk_or_doc.departments and clearance_level(clearance) < LEVELS["SECRET"]:
             return (department or "").strip().lower() in {d.lower() for d in chunk_or_doc.departments}
         return True
 

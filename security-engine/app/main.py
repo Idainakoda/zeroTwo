@@ -1,6 +1,7 @@
 """FastAPI security engine. Spring Boot calls these endpoints before and after the external AI call."""
 import base64
 import binascii
+import hmac
 import logging
 from contextlib import asynccontextmanager
 
@@ -32,7 +33,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 def check_key(x_engine_key: str = Header(default="")) -> None:
-    if config.API_KEY and x_engine_key != config.API_KEY:
+    """Only the backend may call the engine: it sends the shared ENGINE_API_KEY. With no key configured
+    the engine refuses everything, unless ENGINE_ALLOW_NO_KEY=true is set explicitly (local tests)."""
+    if not config.API_KEY:
+        if config.ALLOW_NO_KEY:
+            return
+        raise HTTPException(status_code=503, detail="engine key not configured (set ENGINE_API_KEY)")
+    if not hmac.compare_digest(x_engine_key.encode(), config.API_KEY.encode()):
         raise HTTPException(status_code=401, detail="invalid engine key")
 
 

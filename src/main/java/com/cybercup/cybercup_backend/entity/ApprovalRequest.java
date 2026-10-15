@@ -39,6 +39,11 @@ public class ApprovalRequest {
 
     private boolean useDocuments;
 
+    // Highest classification marked in the prompt or attachment (PUBLIC..SECRET). Approval never lifts
+    // the external-AI ceiling; requests stored before this column existed (null) count as SECRET.
+    @Column(length = 20)
+    private String contentClassification;
+
     @Column(length = 500)
     private String reason;
 
@@ -86,6 +91,8 @@ public class ApprovalRequest {
     public void setDepartment(String department) { this.department = department; }
     public String getMaskedPrompt() { return maskedPrompt; }
     public void setMaskedPrompt(String maskedPrompt) { this.maskedPrompt = maskedPrompt; }
+    public String getContentClassification() { return contentClassification; }
+    public void setContentClassification(String contentClassification) { this.contentClassification = contentClassification; }
     public String getAttachmentContext() { return attachmentContext; }
     public void setAttachmentContext(String attachmentContext) { this.attachmentContext = attachmentContext; }
     public boolean isUseDocuments() { return useDocuments; }
