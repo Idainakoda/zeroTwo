@@ -40,11 +40,20 @@ if (($startBackend -and -not $java) -or ($startFrontend -and -not $node) -or ($s
 $ip = Get-LanAddress
 $waitFor = @()
 
+# Re-running start.ps1 only starts what is not already running (e.g. after a window was closed).
+function Test-Running($port) {
+    return [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+}
+if ($startEngine -and (Test-Running 8000)) { Write-Host "  security engine already running on port 8000 - skipped"; $startEngine = $false }
+if ($startBackend -and (Test-Running 8080)) { Write-Host "  backend already running on port 8080 - skipped"; $startBackend = $false }
+if ($startFrontend -and (Test-Running 5173)) { Write-Host "  frontend already running on port 5173 - skipped"; $startFrontend = $false }
+
 if ($startEngine) {
     Write-Step "Starting the security engine on port 8000$(if ($share) { " (shared: http://${ip}:8000)" })"
     Start-Process "$PSHOME\powershell.exe" -WorkingDirectory "$Root\security-engine" -ArgumentList @(
         "-NoExit", "-Command",
-        "`$Host.UI.RawUI.WindowTitle='CyberCup security engine'; & '$venvPython' -m uvicorn app.main:app --host $bindHost --port 8000")
+        # Restarts automatically if the engine ever stops; close the window to stop it for good.
+        "`$Host.UI.RawUI.WindowTitle='CyberCup security engine (keep this window open)'; while (`$true) { & '$venvPython' -m uvicorn app.main:app --host $bindHost --port 8000; Write-Host 'Security engine stopped - restarting in 3 seconds. Close this window to stop it.' -ForegroundColor Yellow; Start-Sleep 3 }")
     $waitFor += @{Name = "security engine"; Port = 8000}
 }
 
@@ -63,7 +72,7 @@ if ($startBackend) {
     Write-Step "Starting the backend on port 8080 (database profile: $springProfile)$(if ($share) { " (shared: http://${ip}:8080)" })"
     Start-Process "$PSHOME\powershell.exe" -WorkingDirectory $Root -ArgumentList @(
         "-NoExit", "-Command",
-        "`$Host.UI.RawUI.WindowTitle='CyberCup backend'; & '$Root\mvnw.cmd' -q spring-boot:run '-Dspring-boot.run.profiles=$springProfile'")
+        "`$Host.UI.RawUI.WindowTitle='CyberCup backend (keep this window open)'; & '$Root\mvnw.cmd' -q spring-boot:run '-Dspring-boot.run.profiles=$springProfile'")
     $waitFor += @{Name = "backend"; Port = 8080}
 }
 
@@ -73,7 +82,7 @@ if ($startFrontend) {
     Write-Step "Starting the frontend on http://localhost:5173/zeroTwo/ (backend: $($env:VITE_API_BASE_URL))"
     Start-Process "$PSHOME\powershell.exe" -WorkingDirectory "$Root\frontend" -ArgumentList @(
         "-NoExit", "-Command",
-        "`$Host.UI.RawUI.WindowTitle='CyberCup frontend'; & '$node' node_modules\vite\bin\vite.js --port 5173 $viteHost")
+        "`$Host.UI.RawUI.WindowTitle='CyberCup frontend (keep this window open)'; & '$node' node_modules\vite\bin\vite.js --port 5173 $viteHost")
     $waitFor += @{Name = "frontend"; Port = 5173}
 }
 

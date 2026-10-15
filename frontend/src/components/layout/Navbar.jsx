@@ -37,8 +37,10 @@ export default function Navbar({ onMenu }) {
   }, [token]);
 
   const engine = status?.engine || {};
-  const engineOk = engine.status === "ok";
-  const mlOk = engine.ml_injection?.semantic && engine.ml_injection?.classifier;
+  // "degraded" only lists optional layers that are missing (e.g. the local model): the engine is up.
+  const engineOk = engine.status === "ok" || engine.status === "degraded";
+  const missingCore = (engine.missing_layers || []).filter((l) => l !== "local_llm");
+  const mlOk = engine.ml_injection?.semantic && engine.ml_injection?.classifier && missingCore.length === 0;
   const gemini = status?.gemini;
   const local = engine.local_llm?.reachable;
 
