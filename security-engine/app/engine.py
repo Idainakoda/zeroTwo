@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app import config, llm_analyzer
-from app.detectors import confidential, injection, pii, secrets
+from app.detectors import confidential, id_documents, injection, pii, secrets
 from app.detectors.common import value_hash
 from app.detectors.ml_injection import ml
 from app.rag import store as rag_store
@@ -400,7 +400,8 @@ def analyze_document(req: DocumentRequest) -> DocumentAnalysis:
     for chunk in req.chunks:
         boundaries.append((offset, offset + len(chunk)))
         offset += len(chunk) + 1
-    cross_chunk = [f for f in _detect_data(joined) if f.start >= 0
+    joined_data = _detect_data(joined)
+    cross_chunk = [f for f in joined_data if f.start >= 0
                    and any(f.start < end < f.end for _, end in boundaries[:-1])]
     for i, chunk in enumerate(req.chunks):
         norm = normalize(chunk)
@@ -427,4 +428,12 @@ def analyze_document(req: DocumentRequest) -> DocumentAnalysis:
         if not quarantined:
             safe_parts.append(f"<<UNTRUSTED_DOCUMENT source={req.source} chunk={i}>>\n{cleaned}\n<</UNTRUSTED_DOCUMENT>>")
     return DocumentAnalysis(chunks=verdicts, quarantined=sum(v.quarantined for v in verdicts),
-                            spotlighted_context="\n\n".join(safe_parts), timing_ms=_ms(t))
+                            spotlighted_context="\n\n".join(safe_parts), timing_ms=_ms(t),
+                            document_types=recognise_documents(joined, joined_data))
+
+
+def recognise_documents(text: str, findings: list[Finding] | None = None) -> list[dict]:
+    """Standard documents (Aadhaar card, PAN card, bank statement...) the text comes from."""
+    if findings is None:
+        findings = _detect_data(text)
+    return [m.as_dict() for m in id_documents.recognise(text, {f.type for f in findings})]

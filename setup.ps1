@@ -14,6 +14,10 @@ param([string]$EnvFile = "")
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 if (-not $EnvFile) { $EnvFile = "$Root\.env" }
+# Some terminals start without PowerShell or System32 on PATH; the Maven wrapper needs both.
+foreach ($dir in @($PSHOME, "$env:SystemRoot\System32")) {
+    if (($env:Path -split ";") -notcontains $dir) { $env:Path = "$dir;$env:Path" }
+}
 . "$Root\scripts\common.ps1"
 
 if (-not (Test-Path $EnvFile)) {

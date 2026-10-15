@@ -103,6 +103,7 @@ export function categoryLabel(category) {
     OUTPUT_LEAK: "Output leak",
     RAG_ACCESS: "Restricted retrieval",
     BULK_PII: "Bulk personal data",
+    ID_DOCUMENT: "Identity document",
     RESPONSE: "Response",
     SUSPICIOUS: "Suspicious",
   };

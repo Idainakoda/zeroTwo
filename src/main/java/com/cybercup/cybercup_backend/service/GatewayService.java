@@ -102,18 +102,49 @@ public class GatewayService {
             int quarantined = ((Number) doc.get("quarantined")).intValue();
             attachmentContext = String.valueOf(doc.get("spotlighted_context"));
             Set<String> docTypes = new TreeSet<>();
+            boolean maskedData = false;
             for (Map<String, Object> c : (List<Map<String, Object>>) doc.get("chunks")) {
                 for (Map<String, Object> f : (List<Map<String, Object>>) c.get("findings")) {
                     docTypes.add(String.valueOf(f.get("type")));
+                    maskedData |= Boolean.TRUE.equals(f.get("redactable")) && !"INJECTION".equals(f.get("category"));
                 }
             }
-            attachmentInfo = Map.of("sections", chunks.size(), "quarantined", quarantined, "types", docTypes);
+            // Standard documents recognised in the attachment (Aadhaar card, PAN card, bank statement...).
+            List<Map<String, Object>> recognised = new ArrayList<>();
+            for (Map<String, Object> m : (List<Map<String, Object>>) doc.getOrDefault("document_types", List.of())) {
+                recognised.add(Map.of("type", m.get("type"), "label", m.get("label"), "group", m.get("group")));
+            }
+            attachmentInfo = new LinkedHashMap<>();
+            attachmentInfo.put("sections", chunks.size());
+            attachmentInfo.put("quarantined", quarantined);
+            attachmentInfo.put("types", docTypes);
+            attachmentInfo.put("documents", recognised);
             if (quarantined > 0) {
-                notes.add(quarantined + " section(s) of the attached document contained hidden instructions and were removed.");
-                policyTrail.add("Indirect prompt injection in attachment -> QUARANTINE");
+                notes.add(quarantined + " section(s) of the attached document were withheld from the AI "
+                        + "(hidden instructions or data that cannot be masked safely).");
+                policyTrail.add("Unsafe section in attachment -> QUARANTINE");
                 if (PolicyDecisionService.rank(action) < PolicyDecisionService.rank("WARN")) {
                     action = "WARN";
                 }
+            }
+            for (Map<String, Object> m : recognised) {
+                // Identity documents follow the ID_DOCUMENT policy, financial ones the FINANCIAL policy.
+                String type = "IDENTITY".equals(m.get("group")) ? "ID_DOCUMENT" : "FINANCIAL";
+                Map.Entry<String, String> rule = policies.actionFor(type);
+                policyTrail.add(rule.getValue() + " (" + m.get("label") + " attached) -> " + rule.getKey());
+                String label = String.valueOf(m.get("label"));
+                if (label.length() > 1 && Character.isLowerCase(label.charAt(1)) && !label.startsWith("Aadhaar")) {
+                    label = Character.toLowerCase(label.charAt(0)) + label.substring(1);   // "a bank statement"
+                }
+                notes.add("The attachment looks like " + ("AEIOUaeiou".indexOf(label.charAt(0)) >= 0 ? "an " : "a ")
+                        + label + ".");
+                if (PolicyDecisionService.rank(rule.getKey()) > PolicyDecisionService.rank(action)) {
+                    action = rule.getKey();
+                }
+            }
+            if (maskedData) {
+                // Attachment values are always masked (irreversibly) before the AI sees them.
+                notes.add("Personal or financial data in the attachment was masked before it reached the AI.");
             }
             timing.put("attachmentMs", System.currentTimeMillis() - t);
         }
@@ -189,7 +220,15 @@ public class GatewayService {
             ar.setAttachmentContext(attachmentContext);
             ar.setUseDocuments(useDocuments);
             ar.setReason(String.join("; ", reasons.stream().limit(3).toList()));
-            ar.setFindingTypes(typesOf(findings));
+            Set<String> heldTypes = new TreeSet<>();
+            if (!typesOf(findings).isEmpty()) {
+                heldTypes.addAll(List.of(typesOf(findings).split(",")));
+            }
+            if (attachmentInfo != null) {
+                ((List<Map<String, Object>>) attachmentInfo.get("documents"))
+                        .forEach(m -> heldTypes.add(String.valueOf(m.get("type"))));
+            }
+            ar.setFindingTypes(String.join(",", heldTypes));
             ar.setPolicyName(String.join("; ", policyTrail));
             ar.setRiskScore(((Number) a.getOrDefault("risk_score", 0)).intValue());
             approvalId = approvals.save(ar).getId();
@@ -338,9 +377,25 @@ public class GatewayService {
         String requestId = String.valueOf(out.get("requestId"));
         String action = String.valueOf(out.get("action"));
         List<Map<String, Object>> findings = (List<Map<String, Object>>) out.get("findings");
-        String types = typesOf(findings);
-        String categories = findings.stream().map(f -> String.valueOf(f.get("category"))).distinct().sorted()
-                .collect(Collectors.joining(","));
+        // Standard documents recognised in the attachment count as findings of this request.
+        Map<String, Object> attachment = (Map<String, Object>) out.get("attachment");
+        List<Map<String, Object>> documents = attachment == null ? List.of()
+                : (List<Map<String, Object>>) attachment.getOrDefault("documents", List.of());
+        Set<String> typeSet = new TreeSet<>();
+        if (!typesOf(findings).isEmpty()) {
+            typeSet.addAll(List.of(typesOf(findings).split(",")));
+        }
+        Set<String> categorySet = new TreeSet<>();
+        findings.forEach(f -> categorySet.add(String.valueOf(f.get("category"))));
+        List<String> documentCategories = new ArrayList<>();
+        for (Map<String, Object> m : documents) {
+            typeSet.add(String.valueOf(m.get("type")));
+            String c = "IDENTITY".equals(m.get("group")) ? "ID_DOCUMENT" : "FINANCIAL";
+            categorySet.add(c);
+            documentCategories.add(c);
+        }
+        String types = String.join(",", typeSet);
+        String categories = String.join(",", categorySet);
         int risk = ((Number) a.getOrDefault("risk_score", 0)).intValue();
         String responseDecision = answer == null ? null : (String) answer.get("decision");
 
@@ -378,10 +433,12 @@ public class GatewayService {
             default -> "LOW";
         };
         // A pure retrieval denial is recorded once, as a RETRIEVAL incident (below).
-        boolean retrievalOnly = ragAttempt && d.policyTypes().isEmpty() && d.notes().isEmpty();
+        boolean retrievalOnly = ragAttempt && d.policyTypes().isEmpty() && d.notes().isEmpty() && documents.isEmpty();
         if (!"ALLOW".equals(action) && !retrievalOnly) {
-            String category = d.policyTypes().isEmpty() ? (ragAttempt ? "RAG_ACCESS" : "SUSPICIOUS")
-                    : String.join(",", d.policyTypes());
+            Set<String> policyCategories = new LinkedHashSet<>(d.policyTypes());
+            policyCategories.addAll(documentCategories);
+            String category = policyCategories.isEmpty() ? (ragAttempt ? "RAG_ACCESS" : "SUSPICIOUS")
+                    : String.join(",", policyCategories);
             Incident inc = new Incident(user.getId(), action, cut(category, 100),
                     cut(String.join("; ", (List<String>) out.get("reasons")) + noteSuffix(out), 500));
             inc.setRequestId(requestId);

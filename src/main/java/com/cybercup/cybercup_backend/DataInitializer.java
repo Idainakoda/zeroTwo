@@ -63,7 +63,11 @@ public class DataInitializer {
                 new String[]{"Bulk personal data export", "BULK_PII", "REQUIRE_APPROVAL",
                         "More than 10 personal identifiers in one request."},
                 new String[]{"Unauthorised document retrieval", "RAG_ACCESS", "BLOCK",
-                        "Requests that match documents above the user's clearance."});
+                        "Requests that match documents above the user's clearance."},
+                new String[]{"Identity documents (Aadhaar, PAN, passport, voter ID, licence)", "ID_DOCUMENT",
+                        "REQUIRE_APPROVAL",
+                        "An attached ID card or scan, recognised by its printed text (OCR reads pictures and scans). "
+                                + "Its numbers are masked either way; a supervisor approves before the AI sees it."});
         for (String[] d : defaults) {
             if (!policies.existsByNameIgnoreCase(d[0])) {
                 Policy p = new Policy();

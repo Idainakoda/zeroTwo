@@ -9,6 +9,13 @@ export function sendPrompt(token, { prompt, useDocuments, attachment }) {
   });
 }
 
+/** Reads an attachment (PDF, Word, picture via OCR, text) and recognises ID documents. Nothing is stored. */
+export function extractAttachment(token, file) {
+  const form = new FormData();
+  form.append("file", file);
+  return apiRequest("/api/gateway/extract", { method: "POST", token, body: form });
+}
+
 /** Inspection only (nothing is sent to the AI model). */
 export function inspectPrompt(token, prompt) {
   return apiRequest("/api/gateway/inspect", {

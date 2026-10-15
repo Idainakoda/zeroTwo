@@ -72,15 +72,28 @@ def number_candidates(text: str) -> list[NumberCandidate]:
     run = []
     run_digits = 0
 
+    def emit(items):
+        digits = "".join(item[0] for item in items)
+        if 4 <= len(digits) <= 19:
+            start, end = items[0][1], items[-1][2]
+            if ((start == 0 or not text[start - 1].isalnum() and text[start - 1] != "_")
+                    and (end == len(text) or not text[end].isalnum() and text[end] != "_")):
+                out.append(NumberCandidate(digits, start, end, any(item[3] for item in items)))
+        elif len(digits) > 19 and any(item[4] for item in items[1:]):
+            # Too long to be one identifier, so the newlines separate values (a date on one
+            # line, an Aadhaar number on the next, as on a scanned card): check each line.
+            line: list = []
+            for item in items:
+                if item[4] and line:
+                    emit(line)
+                    line = []
+                line.append(item)
+            emit(line)
+
     def flush():
         nonlocal run_digits
         if run:
-            digits = "".join(item[0] for item in run)
-            if 4 <= len(digits) <= 19:
-                start, end = run[0][1], run[-1][2]
-                if ((start == 0 or not text[start - 1].isalnum() and text[start - 1] != "_")
-                        and (end == len(text) or not text[end].isalnum() and text[end] != "_")):
-                    out.append(NumberCandidate(digits, start, end, any(item[3] for item in run)))
+            emit(list(run))
             run.clear()
             run_digits = 0
 
@@ -89,13 +102,13 @@ def number_candidates(text: str) -> list[NumberCandidate]:
         digits = DIGIT_WORDS[word.lower()] if word else match.group()
         if match.group("repeat"):
             digits *= 2 if match.group("repeat").lower() == "double" else 3
+        gap = text[run[-1][2]:match.start()] if run else ""
         if run:
-            gap = text[run[-1][2]:match.start()]
             # Newlines can wrap a single number; blank lines and record delimiters cannot.
             if (not NUMBER_GAP.fullmatch(gap) or "\n\n" in gap or ("," in gap and "\n" in gap)
                     or ("," in gap and run_digits >= 9)):
                 flush()
-        run.append((digits, match.start(), match.end(), bool(word)))
+        run.append((digits, match.start(), match.end(), bool(word), bool(run) and "\n" in gap))
         run_digits += len(digits)
     flush()
     return out

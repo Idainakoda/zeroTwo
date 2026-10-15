@@ -31,6 +31,8 @@ Employee → Spring Boot ──POST /v1/analyze/prompt──▶ Engine
 | 9 | Prompt hardening | `app/redaction.py` | `system_prompt_addon` holds a per-request **canary** and safety rules for Spring Boot to add to the AI's system prompt |
 | 10 | Response inspection | `app/engine.py` | Canary leak, instruction-disclosure phrases, PII or secrets not from this user (redacted), then placeholders are restored for this user only |
 | 11 | Document scan | `app/engine.py` | Each chunk is scanned. Chunks with indirect injection are quarantined. The rest are redacted and wrapped in `<<UNTRUSTED_DOCUMENT>>` markers |
+| 12 | Uploads and OCR | `app/extraction.py` | Text from PDF (PyMuPDF), Word (python-docx) and pictures. Embedded pictures and scanned pages are read with **RapidOCR** (ONNX, CPU, about 1 s per picture). Only document, picture and text types are accepted; `.env`, keys and executables are refused |
+| 13 | Standard documents | `app/detectors/id_documents.py` | Recognises Aadhaar, PAN, passport, voter ID, driving licence, bank statement, cheque, salary slip and Form 16 from printed titles and field labels plus validated identifiers. It works on OCR text without spaces. The evidence lists cue names, never values |
 
 The audit record contains **no raw values**: only types, counts, HMAC hashes, rules, decision and timings. Spring Boot should store it in MySQL and chain each row's hash to the previous one (`hash = SHA256(prev_hash + record_json)`) so tampering can be detected.
 
@@ -58,6 +60,7 @@ API docs: http://localhost:8000/docs · Health: http://localhost:8000/health
 | POST | `/v1/analyze/prompt` | `{prompt, user:{user_id, role, department, clearance}, deep_scan}` |
 | POST | `/v1/analyze/response` | `{request_id, response, user}`. Use the `request_id` from the prompt call |
 | POST | `/v1/analyze/document` | `{chunks:[...], source}` for uploaded files and RAG chunks |
+| POST | `/v1/extract` | `{filename, content_base64}`: text of a PDF, Word file, picture or text file (OCR included), plus `document_types`. A refused file returns 422 with a reason |
 | POST | `/v1/rag/search` | `{query, user:{clearance, department}}`: clearance-filtered retrieval, with an `unauthorised_attempt` flag and scanned, spotlighted `context` |
 | GET | `/v1/rag/documents` | knowledge-base documents (`?clearance=&department=` adds an `accessible` flag) |
 | POST | `/v1/eval/run` | runs the evaluation set and returns metrics (for the dashboard) |

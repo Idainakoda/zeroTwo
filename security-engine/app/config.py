@@ -62,3 +62,7 @@ BULK_PII_LIMIT = int(os.getenv("BULK_PII_LIMIT", "10"))
 
 # How long masked values are kept for re-hydrating the AI response.
 VAULT_TTL_S = int(os.getenv("VAULT_TTL_S", "1800"))
+
+# OCR for pictures in uploads (scanned pages, photographed ID cards). RapidOCR on CPU.
+USE_OCR = _bool("USE_OCR", True)
+OCR_THREADS = int(os.getenv("OCR_THREADS", "4"))

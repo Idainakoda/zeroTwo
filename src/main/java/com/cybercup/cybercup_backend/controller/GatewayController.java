@@ -9,9 +9,12 @@ import com.cybercup.cybercup_backend.service.GatewayService;
 import com.cybercup.cybercup_backend.service.LlmClient;
 import com.cybercup.cybercup_backend.web.CurrentUser;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +39,31 @@ public class GatewayController {
     @PostMapping("/gateway/chat")
     public Map<String, Object> chat(@Valid @RequestBody ChatRequest request, Authentication auth) {
         return gateway.chat(CurrentUser.id(auth), request.prompt(), request.useDocuments(), request.attachment(), true);
+    }
+
+    /**
+     * Reads an attachment before it is sent: text from PDFs, Word files and pictures (OCR), and which
+     * standard documents it looks like (Aadhaar card, PAN card...). Nothing is stored or sent to the AI;
+     * the text is fully inspected again when it is attached to a prompt.
+     */
+    @PostMapping(value = "/gateway/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> extract(@RequestParam("file") MultipartFile file) throws IOException {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("The file is empty.");
+        }
+        Map<String, Object> r = engine.extract(file.getOriginalFilename(), file.getBytes());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("name", r.get("filename"));
+        out.put("kind", r.get("kind"));
+        out.put("text", r.get("text"));
+        out.put("chars", r.get("chars"));
+        out.put("pages", r.get("pages"));
+        out.put("ocrImages", r.get("ocr_images"));
+        out.put("ocrMs", r.get("ocr_ms"));
+        out.put("truncated", r.get("truncated"));
+        out.put("warnings", r.get("warnings"));
+        out.put("documentTypes", r.get("document_types"));
+        return out;
     }
 
     /** The signed-in user's own history (metadata only, no prompt text). */

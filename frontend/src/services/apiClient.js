@@ -12,7 +12,9 @@ export async function apiRequest(
     ...headers,
   };
 
-  if (body !== undefined) {
+  // FormData (file uploads) sets its own multipart Content-Type with the boundary.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isForm) {
     requestHeaders["Content-Type"] = "application/json";
   }
 
@@ -26,7 +28,7 @@ export async function apiRequest(
     response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
   } catch {
     throw new Error(

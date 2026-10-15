@@ -5,11 +5,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +66,30 @@ public class EngineClient {
 
     public Map<String, Object> analyzeDocument(List<String> chunks, String source) {
         return post("/v1/analyze/document", Map.of("chunks", chunks, "source", source));
+    }
+
+    /**
+     * Text of an uploaded file (PDF, Word, picture or text; pictures and scanned pages are read with
+     * OCR) and the standard documents it looks like. A file the engine refuses (type, size, damaged)
+     * becomes an IllegalArgumentException carrying the engine's explanation for the user.
+     */
+    public Map<String, Object> extract(String filename, byte[] content) {
+        Map<String, Object> body = Map.of("filename", filename == null ? "upload" : filename,
+                "content_base64", Base64.getEncoder().encodeToString(content));
+        try {
+            return client.post().uri("/v1/extract").body(body).retrieve().body(MAP);
+        } catch (HttpClientErrorException e) {
+            Object detail = null;
+            try {
+                Map<?, ?> error = e.getResponseBodyAs(Map.class);
+                detail = error == null ? null : error.get("detail");
+            } catch (RuntimeException ignored) {
+                // fall through to the generic message
+            }
+            throw new IllegalArgumentException(detail instanceof String s ? s : "This file could not be read.");
+        } catch (RestClientException e) {
+            throw new EngineUnavailableException(e);
+        }
     }
 
     public Map<String, Object> ragSearch(String query, User user) {

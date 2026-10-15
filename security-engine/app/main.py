@@ -1,16 +1,19 @@
 """FastAPI security engine. Spring Boot calls these endpoints before and after the external AI call."""
+import base64
+import binascii
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import config, engine, llm_analyzer, policy
+from app import config, engine, extraction, llm_analyzer, policy
 from app.detectors import pii
 from app.detectors.ml_injection import ml
+from app.extraction import ocr
 from app.rag import store as rag_store
-from app.schemas import (DocumentAnalysis, DocumentRequest, PromptAnalysis, PromptRequest, RagSearchRequest,
-                         ResponseAnalysis, ResponseRequest)
+from app.schemas import (DocumentAnalysis, DocumentRequest, ExtractRequest, ExtractResponse, PromptAnalysis,
+                         PromptRequest, RagSearchRequest, ResponseAnalysis, ResponseRequest)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -20,6 +23,7 @@ async def lifespan(_: FastAPI):
     pii.presidio.load()
     ml.load()
     rag_store.load()
+    ocr.load()
     yield
 
 
@@ -42,6 +46,8 @@ async def health():
         missing.append("semantic")
     if config.USE_ML_INJECTION and config.USE_CLASSIFIER and ml.classifier is None:
         missing.append("classifier")
+    if config.USE_OCR and not ocr.ready:
+        missing.append("ocr")
     if config.USE_LLM and not llm_ready:
         missing.append("local_llm")
     return {
@@ -55,6 +61,7 @@ async def health():
                          "classifier_revision": config.CLASSIFIER_REVISION,
                          "error": ml.error or None},
         "rag_documents": len(rag_store.docs),
+        "ocr": {"enabled": config.USE_OCR, "ready": ocr.ready, "error": ocr.error or None},
         "local_llm": {"enabled": config.USE_LLM, "model": config.OLLAMA_MODEL,
                       "reachable": llm_ready, "model_available": llm_ready},
     }
@@ -73,6 +80,26 @@ def analyze_response(req: ResponseRequest):
 @app.post("/v1/analyze/document", response_model=DocumentAnalysis, dependencies=[Depends(check_key)])
 def analyze_document(req: DocumentRequest):
     return engine.analyze_document(req)
+
+
+@app.post("/v1/extract", response_model=ExtractResponse, dependencies=[Depends(check_key)])
+def extract_file(req: ExtractRequest):
+    """Text of an uploaded file (PDF, Word, picture, text), with OCR for pictures and scanned pages.
+
+    Only extraction and document-type recognition happen here; the text is inspected in full by
+    /v1/analyze/document when it is sent with a prompt."""
+    try:
+        data = base64.b64decode(req.content_base64, validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=400, detail="The file could not be read.")
+    try:
+        out = extraction.extract(req.filename, data)
+    except extraction.ExtractionError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return ExtractResponse(filename=out.filename, kind=out.kind, text=out.text, chars=len(out.text),
+                           pages=out.pages, ocr_images=out.ocr_images, ocr_ms=out.ocr_ms,
+                           truncated=out.truncated, warnings=out.warnings,
+                           document_types=engine.recognise_documents(out.text))
 
 
 @app.post("/v1/rag/search", dependencies=[Depends(check_key)])

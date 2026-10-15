@@ -90,7 +90,12 @@ export default function InspectionStatus({ result }) {
                 detail={`${(result.findings || []).length} finding(s) · personal data, secrets, confidential content, injection`} />
           {result.attachment && (
             <Step state={result.attachment.quarantined ? "stop" : "done"} title="Attached document scan" time={t.attachmentMs}
-                  detail={`${result.attachment.quarantined} of ${result.attachment.sections} section(s) quarantined`} />
+                  detail={[
+                    (result.attachment.documents || []).length
+                      ? `Recognised: ${result.attachment.documents.map((d) => d.label).join(", ")}`
+                      : null,
+                    `${result.attachment.quarantined} of ${result.attachment.sections} section(s) withheld`,
+                  ].filter(Boolean).join(" · ")} />
           )}
           <Step state={blocked ? "stop" : "done"} title="Policy enforcement"
                 detail={(result.policies || []).length ? `${result.policies.length} policy rule(s) applied` : "No policy triggered"} />

@@ -2,7 +2,7 @@ import { apiRequest } from "./apiClient";
 
 export const POLICY_TYPES = [
   "PII", "FINANCIAL", "SECRET", "CONFIDENTIAL", "INFRASTRUCTURE",
-  "INJECTION", "BULK_PII", "RAG_ACCESS",
+  "INJECTION", "BULK_PII", "RAG_ACCESS", "ID_DOCUMENT",
 ];
 
 export const POLICY_ACTIONS = ["ALLOW", "WARN", "MASK", "REDACT", "REQUIRE_APPROVAL", "BLOCK"];

@@ -128,8 +128,36 @@ class ChunkVerdict(BaseModel):
     findings: list[Finding]
 
 
+class DocumentType(BaseModel):
+    type: str                                # e.g. AADHAAR_CARD, PAN_CARD, BANK_STATEMENT
+    label: str
+    group: str                               # IDENTITY or FINANCIAL
+    confidence: float
+    score: int
+    evidence: list[str]                      # printed cues that matched, never the values
+
+
 class DocumentAnalysis(BaseModel):
     chunks: list[ChunkVerdict]
     quarantined: int
     spotlighted_context: str                 # safe chunks wrapped as untrusted data
     timing_ms: float
+    document_types: list[DocumentType] = []
+
+
+class ExtractRequest(BaseModel):
+    filename: str = Field(..., max_length=255)
+    content_base64: str = Field(..., max_length=14_000_000)   # 10 MB file
+
+
+class ExtractResponse(BaseModel):
+    filename: str
+    kind: str                                # text, pdf, docx or image
+    text: str
+    chars: int
+    pages: int
+    ocr_images: int
+    ocr_ms: float
+    truncated: bool
+    warnings: list[str]
+    document_types: list[DocumentType]

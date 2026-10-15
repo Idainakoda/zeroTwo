@@ -24,6 +24,8 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1    # once: tools, Python en
 powershell -ExecutionPolicy Bypass -File .\start.ps1    # every time: engine :8000, backend :8080, frontend :5173
 ```
 
+Or double-click `start.cmd`, which works even in terminals where `powershell` is not on PATH.
+
 `setup.ps1` uses Java 21 and Node 22 if they are installed. If not, it downloads portable copies into `.\tools`, so no admin rights are needed. Python 3.11 or 3.12 must be installed.
 
 - **AI answers:** paste a Gemini key into `.env` (`GEMINI_API_KEY=...`, free at aistudio.google.com). Without a key, every security check still runs. Answers come from the local model if [Ollama](https://ollama.com) is running (`ollama pull llama3.2:3b`).
@@ -31,6 +33,7 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1    # every time: engine :80
 - **Fail-closed:** if the security engine is down, requests are blocked, never forwarded.
 - **MySQL on this laptop:** run `scripts/mysql-setup.sql` once as root (MySQL Workbench or `mysql -u root -p -e "source scripts/mysql-setup.sql"`, replacing the password in it first), then set `DB_PROFILE=mysql`, `DB_USERNAME=cybercup` and `DB_PASSWORD` in `.env`. The backend creates all tables itself.
 - **Prompt log:** every prompt is stored in `gateway_events.prompt_text`, **masked**: personal data and secrets are replaced by placeholders such as `<AADHAAR_1>`, so raw values never reach the database. Admins and analysts see it under *Prompt Log*; employees see their own under *My Activity*. Set `STORE_PROMPTS=NONE` to keep metadata only.
+- **Attachments:** *Attach file* accepts PDF, Word (.docx), pictures (PNG, JPG, WEBP, BMP, TIFF) and text files up to 10 MB. Configuration and credential files such as `.env` are refused. Text inside pictures is read with OCR: scanned pages, photos pasted into a PDF or Word file, and photographed ID cards. ZeroTwo recognises standard documents from their printed text (Aadhaar card, PAN card, passport, voter ID, driving licence, bank statement, cheque, salary slip, Form 16). Their numbers are always masked. An identity document follows the *Identity documents* policy (default: require approval), and a financial document follows the *Financial* policy. Specimen files made from fake data are in `demo-files/`; regenerate them with `python -m evaluation.sample_documents` from `security-engine/`.
 - **Demo data:** with everything running, `powershell -ExecutionPolicy Bypass -File .\scripts\send-demo-prompts.ps1` sends 19 realistic prompts (all three scenarios plus approvals) as the demo users, and an admin approves the held ones.
 - **Two laptops / shared MySQL:** to run the backend and MySQL on one laptop and the engine and frontend on another, follow [docs/02_REMOTE_SETUP.md](docs/02_REMOTE_SETUP.md). Every prompt is then recorded in that MySQL database in real time.
 
@@ -51,6 +54,7 @@ Sign in as **Asha** and use the scenario buttons above the chat box. The **Secur
 
 1. **Accidental disclosure of personal data:** click *Personal data*. Aadhaar (checksum-validated), PAN, phone and name are replaced with `<AADHAAR_1>`-style placeholders before Gemini sees them. Expand *What the AI model received* to show this. The answer comes back with the real values restored for Asha only. *API key in code* shows credentials being **redacted** permanently.
 2. **Prompt-injection extraction:** click *Prompt injection*, *Hinglish attack* or *Reworded attack*. All are **blocked** before reaching the model, and the inspector shows which layer caught each (rules, semantic similarity, ML classifier). *Hidden instruction in CV* shows an **indirect** injection: the poisoned section of the attached document is quarantined and the rest is summarised.
+   *Uploaded ID card:* click **Attach file**, choose `demo-files/specimen-letter-with-aadhaar.pdf` and ask "Summarise this letter in one line." The Aadhaar card pictured inside the PDF is read with OCR and recognised. Its number is masked, and the request is held for a supervisor under the *Identity documents* policy.
 3. **Unauthorised retrieval of a restricted document:** click *Restricted document* (with "Use department documents" on). Asha (INTERNAL) is **denied** and the attempt is logged. Sign in as **Meera** (CONFIDENTIAL, Finance) and ask the same question: she gets the answer, citing *Draft Departmental Budget 2027-28*. Restricted documents are filtered **before** the search runs, so their text never reaches the AI. Answers are also checked against restricted documents as a second layer.
 
 Then sign in as **Admin**:

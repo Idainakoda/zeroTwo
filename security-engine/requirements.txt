@@ -10,4 +10,8 @@ pytest==9.1.1
 # Install CPU-only torch first:  pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
 sentence-transformers==6.1.0
 transformers==5.19.0
+# Uploads: PDF and Word text, OCR for pictures and scanned pages.
+pymupdf==1.28.2
+rapidocr-onnxruntime==1.4.4
+python-docx==1.2.0
 # After installing:  python -m spacy download en_core_web_sm

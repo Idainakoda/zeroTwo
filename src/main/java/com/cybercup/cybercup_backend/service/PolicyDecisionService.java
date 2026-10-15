@@ -18,12 +18,13 @@ public class PolicyDecisionService {
 
     public static final List<String> ACTIONS = List.of("ALLOW", "WARN", "MASK", "REDACT", "REQUIRE_APPROVAL", "BLOCK");
     public static final List<String> TYPES = List.of("PII", "FINANCIAL", "SECRET", "CONFIDENTIAL", "INFRASTRUCTURE",
-            "INJECTION", "BULK_PII", "RAG_ACCESS", "API_KEY", "CUSTOM");
+            "INJECTION", "BULK_PII", "RAG_ACCESS", "ID_DOCUMENT", "API_KEY", "CUSTOM");
 
-    /** Used when no enabled policy exists for a type. */
+    /** Used when no enabled policy exists for a type. ID_DOCUMENT: an attached Aadhaar/PAN card, passport... */
     public static final Map<String, String> DEFAULTS = Map.of(
             "PII", "MASK", "FINANCIAL", "MASK", "SECRET", "REDACT", "CONFIDENTIAL", "REQUIRE_APPROVAL",
-            "INFRASTRUCTURE", "MASK", "INJECTION", "BLOCK", "BULK_PII", "REQUIRE_APPROVAL", "RAG_ACCESS", "BLOCK");
+            "INFRASTRUCTURE", "MASK", "INJECTION", "BLOCK", "BULK_PII", "REQUIRE_APPROVAL", "RAG_ACCESS", "BLOCK",
+            "ID_DOCUMENT", "REQUIRE_APPROVAL");
 
     private static final double INJECTION_BLOCK = 0.70;
     private static final double INJECTION_WARN = 0.30;
