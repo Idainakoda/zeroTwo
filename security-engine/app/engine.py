@@ -15,6 +15,7 @@ from app import config, llm_analyzer
 from app.detectors import confidential, injection, pii, secrets
 from app.detectors.common import value_hash
 from app.detectors.ml_injection import ml
+from app.rag import store as rag_store
 from app.normalizer import normalize
 from app.policy import policy
 from app.redaction import (new_canary, redact, rehydrate, resolve_overlaps, system_prompt_addon, vault)
@@ -64,17 +65,20 @@ def _injection_layers(text: str, norm, inj) -> tuple[float, dict, list[Finding],
     educational = is_educational(norm.views["clean"])
     # The classifier often mistakes source code / config snippets for injections, so on
     # code-like text it can only push the prompt into the grey zone (local Llama), not block.
-    if looks_like_code(text):
+    code = looks_like_code(text)
+    if code:
         res.classifier = round(res.classifier * 0.5, 3)
     fused = fuse_injection(inj.score, res.semantic, res.classifier, educational)
     extra: list[Finding] = []
-    if res.semantic >= 0.3:
+    # On code, weak ML signals are noise; list them only when they could change the decision.
+    sem_min, clf_min = (0.5, 0.6) if code else (0.3, 0.5)
+    if res.semantic >= sem_min:
         extra.append(Finding(category=Category.INJECTION, type=res.semantic_label or "SEMANTIC_MATCH",
                              severity=4 if res.semantic >= 0.7 else 3, confidence=res.semantic,
                              detector="semantic-similarity",
                              reason=f"close to known attack (similarity {res.nearest_attack:.2f}, "
                                     f"nearest legitimate {res.nearest_benign:.2f})"))
-    if res.classifier >= 0.5:
+    if res.classifier >= clf_min:
         extra.append(Finding(category=Category.INJECTION, type="ML_CLASSIFIER_INJECTION",
                              severity=4 if res.classifier >= 0.9 else 3, confidence=res.classifier,
                              detector="deberta-classifier", reason=f"classifier probability {res.classifier:.2f}"))
@@ -207,28 +211,33 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
             reasons.append(f"Suspicious wording (injection score {inj_score:.2f}); allowed with warning")
 
     # ---- Redaction + re-scan of the sanitised prompt ----
+    # Masked copy of the prompt (every redactable value replaced by a placeholder). Always produced,
+    # so the backend's policy can choose MASK / REDACT / REQUIRE_APPROVAL even when the engine's own
+    # recommendation differs. The mapping stays in the vault for re-hydrating the answer.
     sanitized = None
     canary = new_canary()
-    mapping: dict[str, str] = {}
+    t = time.perf_counter()
+    masked, mapping = redact(text, findings)
+    residual_risk = False          # sensitive data still visible after masking
+    residual_inj = False           # masking produced text that reads as an injection
+    if mapping:
+        residual_risk = any(f.redactable and f.severity >= policy.sanitize_min_severity
+                            for f in _detect_data(masked))
+        residual_inj = injection.scan(normalize(masked)).score >= config.INJECTION_BLOCK
+    timing.redact = _ms(t)
     if decision == Decision.SANITIZE:
-        t = time.perf_counter()
-        sanitized, mapping = redact(text, findings)
-        residual = [f for f in _detect_data(sanitized)
-                    if f.redactable and f.severity >= policy.sanitize_min_severity]
-        residual_inj = injection.scan(normalize(sanitized))
-        timing.redact = _ms(t)
-        if residual or residual_inj.score >= config.INJECTION_BLOCK:
+        if residual_risk or residual_inj:
             decision = Decision.BLOCK
-            sanitized = None
             reasons.append("Sensitive data remained after redaction; blocked as a precaution")
+        else:
+            sanitized = masked
 
     if decision == Decision.ALLOW and not reasons:
         notes = sorted({f.type for f in all_findings})
         reasons.append("No sensitive data or attack detected" if not notes
                        else f"Low-risk items noted: {', '.join(notes)}")
 
-    if decision != Decision.BLOCK:
-        vault.put(request_id, mapping, canary)
+    vault.put(request_id, mapping, canary)
 
     risk = _risk_score(all_findings, inj_score)
     timing.total = _ms(t_total)
@@ -238,7 +247,8 @@ async def analyze_prompt(req: PromptRequest) -> PromptAnalysis:
     return PromptAnalysis(
         request_id=request_id, decision=decision, risk_score=risk, injection_score=round(inj_score, 3),
         reasons=reasons, findings=all_findings, sanitized_prompt=sanitized, layer_scores=layer_scores,
-        system_prompt_addon=system_prompt_addon(canary) if decision != Decision.BLOCK else "",
+        masked_prompt=masked if not residual_risk else None, residual_risk=residual_risk,
+        system_prompt_addon=system_prompt_addon(canary),
         llm=llm, timing_ms=timing, audit=audit,
     )
 
@@ -269,7 +279,17 @@ def analyze_response(req: ResponseRequest) -> ResponseAnalysis:
         decision = Decision.BLOCK
         reasons.append("The AI's answer leaked confidential instructions and was withheld")
 
-    data = _detect_data(text)
+    # Restricted documents: text from a document above the user's clearance must never be shown.
+    leaked_docs = rag_store.leaked_documents(text, req.user.clearance, req.user.department)
+    if leaked_docs:
+        findings.append(Finding(category=Category.OUTPUT_LEAK, type="RESTRICTED_DOCUMENT_CONTENT", severity=4,
+                                confidence=0.95, detector="document-fingerprint",
+                                reason=f"answer contains text from {len(leaked_docs)} document(s) above the user's clearance"))
+        decision = Decision.BLOCK
+        reasons.append("The answer contained restricted document content and was withheld")
+
+    # Classified content in answers is controlled per document (above); here we look for personal data and secrets.
+    data = [f for f in _detect_data(text) if f.category in (Category.PII, Category.FINANCIAL, Category.SECRET)]
     own_values = {value_hash(v) for v in mapping.values()}
     foreign = [f for f in data if f.value_hash not in own_values]
     findings.extend(foreign)
@@ -286,7 +306,10 @@ def analyze_response(req: ResponseRequest) -> ResponseAnalysis:
             decision = Decision.SANITIZE
             reasons.append("Sensitive data in the AI's answer was redacted: "
                            + ", ".join(sorted({f.type for f in to_redact})))
-        safe = rehydrate(safe, mapping)
+        if req.rehydrate:
+            safe = rehydrate(safe, mapping)
+        else:
+            safe = re.sub(r"<([A-Z_]+?)_\d+>", r"[REDACTED:\1]", safe)
         if not reasons:
             reasons.append("Response is clean")
 

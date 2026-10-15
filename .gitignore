@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### CyberCup local files ###
+.env
+data/
+*.log
+node_modules/
+tools/

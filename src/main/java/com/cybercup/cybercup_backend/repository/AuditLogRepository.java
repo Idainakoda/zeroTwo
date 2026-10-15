@@ -12,6 +12,10 @@ public interface AuditLogRepository
 
     List<AuditLog> findAllByOrderByCreatedAtDesc();
 
+    List<AuditLog> findAllByOrderByIdAsc();
+
+    java.util.Optional<AuditLog> findTopByOrderByIdDesc();
+
     List<AuditLog> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     List<AuditLog> findByActionOrderByCreatedAtDesc(String action);

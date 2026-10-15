@@ -47,7 +47,16 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setEnabled(true);
         user.setRoles(Set.of(employeeRole));
+        // New self-registered accounts start with the lowest clearance; an admin can raise it.
+        user.setDepartment("General");
+        user.setClearance("PUBLIC");
 
         return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public User getById(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
     }
 }

@@ -24,6 +24,12 @@ public class AuditLogController {
         return ResponseEntity.ok(auditLogService.getAllLogs());
     }
 
+    /** Recomputes the hash chain: any edited or deleted row breaks it. */
+    @GetMapping("/verify")
+    public ResponseEntity<java.util.Map<String, Object>> verify() {
+        return ResponseEntity.ok(auditLogService.verifyChain());
+    }
+
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<AuditLog>> getLogsByUser(
             @PathVariable Long userId) {

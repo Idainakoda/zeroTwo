@@ -25,6 +25,13 @@ public class IncidentController {
         );
     }
 
+    @GetMapping("/my")
+    public ResponseEntity<List<Incident>> myIncidents(
+            org.springframework.security.core.Authentication authentication) {
+        return ResponseEntity.ok(incidentService.getIncidentsByUser(
+                com.cybercup.cybercup_backend.web.CurrentUser.id(authentication)));
+    }
+
     @GetMapping("/decision/{decision}")
     public ResponseEntity<List<Incident>> getIncidentsByDecision(
             @PathVariable String decision) {

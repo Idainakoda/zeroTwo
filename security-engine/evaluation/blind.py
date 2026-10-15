@@ -23,7 +23,14 @@ CONFIGS = {
 
 
 async def collect() -> tuple[list[dict], list[dict]]:
-    config.USE_LLM = False
+    saved_llm, config.USE_LLM = config.USE_LLM, False      # measure the fast layers only
+    try:
+        return await _collect()
+    finally:
+        config.USE_LLM = saved_llm
+
+
+async def _collect() -> tuple[list[dict], list[dict]]:
     pii.presidio.load()
     ml.load()
     data = json.loads((HERE / "blind_set.json").read_text(encoding="utf-8"))
@@ -42,6 +49,24 @@ def score(row: dict, use: tuple[bool, bool, bool]) -> float:
     L = row["layers"]
     return engine.fuse_injection(L["rules"] if use[0] else 0, (L.get("semantic") or 0) if use[1] else 0,
                                  (L.get("classifier") or 0) if use[2] else 0, L.get("educational_framing", False))
+
+
+async def run_blind() -> dict:
+    """Same ablation as main(), returned as data for the dashboard."""
+    attacks, legit = await collect()
+    block, grey = config.INJECTION_BLOCK, config.INJECTION_GREY_LOW
+    rows = []
+    for name, use in CONFIGS.items():
+        a = [score(r, use) for r in attacks]
+        g = [score(r, use) for r in legit]
+        rows.append({"layers": name, "attacks_blocked": sum(s >= block for s in a), "attacks_to_llm": sum(grey <= s < block for s in a),
+                     "legit_blocked": sum(s >= block for s in g), "legit_to_llm": sum(grey <= s < block for s in g)})
+    full = CONFIGS["rules + semantic + classifier"]
+    ms = sorted(r["ms"] for r in attacks + legit)
+    return {"attacks": len(attacks), "legit": len(legit), "table": rows,
+            "missed": [r["text"] for r in attacks if score(r, full) < block],
+            "false_blocks": [r["text"] for r in legit if score(r, full) >= block],
+            "latency_ms": {"p50": round(ms[len(ms) // 2]), "p95": round(ms[int(len(ms) * 0.95)])}}
 
 
 def main() -> None:

@@ -51,4 +51,23 @@ public class LoginResponse {
     public List<String> getRoles() {
         return roles;
     }
+
+    private String department;
+    private String clearance;
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getClearance() {
+        return clearance;
+    }
+
+    public void setClearance(String clearance) {
+        this.clearance = clearance;
+    }
 }

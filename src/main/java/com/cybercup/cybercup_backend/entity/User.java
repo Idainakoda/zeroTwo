@@ -45,6 +45,30 @@ public class User {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Department and clearance drive access-controlled retrieval (RAG).
+    @Column(length = 60)
+    private String department;
+
+    // PUBLIC, INTERNAL, CONFIDENTIAL or SECRET
+    @Column(length = 20)
+    private String clearance;
+
+    public String getDepartment() {
+        return department == null ? "" : department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getClearance() {
+        return clearance == null || clearance.isBlank() ? "INTERNAL" : clearance;
+    }
+
+    public void setClearance(String clearance) {
+        this.clearance = clearance;
+    }
+
     public User() {
     }
 

@@ -88,19 +88,17 @@ public class PolicyService {
     }
 
     private void validatePolicy(Policy policy) {
-
-        if (!List.of("PII", "API_KEY", "CUSTOM")
-                .contains(policy.getPolicyType())) {
+        if (!PolicyDecisionService.TYPES.contains(policy.getPolicyType())) {
             throw new IllegalArgumentException(
-                    "Invalid policyType. Use PII, API_KEY, or CUSTOM"
+                    "Invalid policyType. Use one of " + PolicyDecisionService.TYPES
             );
         }
-
-        if (!List.of("ALLOW", "SANITIZE", "BLOCK")
-                .contains(policy.getAction())) {
+        String action = PolicyDecisionService.normalizeAction(policy.getAction());
+        if (!PolicyDecisionService.ACTIONS.contains(action)) {
             throw new IllegalArgumentException(
-                    "Invalid action. Use ALLOW, SANITIZE, or BLOCK"
+                    "Invalid action. Use one of " + PolicyDecisionService.ACTIONS
             );
         }
+        policy.setAction(action);
     }
 }

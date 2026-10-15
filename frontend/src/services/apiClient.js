@@ -1,6 +1,8 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+export const UNAUTHORIZED_EVENT = "cybercup:unauthorized";
+
 export async function apiRequest(
   endpoint,
   { method = "GET", body, token, headers = {} } = {}
@@ -41,6 +43,11 @@ export async function apiRequest(
     } catch {
       data = text;
     }
+  }
+
+  // Expired or invalid session: let the auth context sign the user out.
+  if (response.status === 401 && token) {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
   }
 
   if (!response.ok) {

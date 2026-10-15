@@ -2,6 +2,16 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { homeFor } from "../utils/routing";
+
+// Seeded demo accounts (local prototype). Hide with VITE_SHOW_DEMO_ACCOUNTS=false.
+const DEMO_ACCOUNTS = [
+  { label: "Employee · Revenue · INTERNAL", email: "asha@cybercup.demo", password: "Asha@2026" },
+  { label: "Officer · Finance · CONFIDENTIAL", email: "meera@cybercup.demo", password: "Meera@2026" },
+  { label: "Security analyst · SECRET", email: "analyst@cybercup.demo", password: "Analyst@2026" },
+  { label: "Admin · SECRET", email: "admin@cybercup.demo", password: "Admin@2026" },
+];
+const SHOW_DEMO = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS !== "false";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -20,15 +30,7 @@ export default function LoginPage() {
 
     try {
       const data = await login(email.trim(), password);
-      const roles = data.roles || [];
-
-      if (roles.includes("ADMIN")) {
-        navigate("/admin", { replace: true });
-      } else if (roles.includes("SECURITY_ANALYST")) {
-        navigate("/security", { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
-      }
+      navigate(homeFor(data.roles || []), { replace: true });
     } catch (err) {
       setError(err.message || "Unable to sign in. Please try again.");
     } finally {
@@ -165,6 +167,25 @@ export default function LoginPage() {
                 {!loading && <span>→</span>}
               </button>
             </form>
+
+            {SHOW_DEMO && (
+              <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Demo accounts</p>
+                <div className="grid gap-1.5">
+                  {DEMO_ACCOUNTS.map((a) => (
+                    <button
+                      key={a.email}
+                      type="button"
+                      onClick={() => { setEmail(a.email); setPassword(a.password); setError(""); }}
+                      className="flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs text-slate-300 transition hover:bg-cyan-300/10 hover:text-cyan-100"
+                    >
+                      <span>{a.label}</span>
+                      <span className="text-slate-500">{a.email}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="my-7 flex items-center gap-3">
               <div className="h-px flex-1 bg-white/10" />

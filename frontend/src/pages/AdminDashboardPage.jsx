@@ -1,361 +1,200 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Activity, ClipboardCheck, EyeOff, FileLock2, RefreshCw, ShieldAlert, ShieldX, Timer,
+} from "lucide-react";
+import {
+  Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import { useAuth } from "../context/AuthContext";
+import { getDashboardStats, getIncidents } from "../services/adminService";
+import { Card, CardTitle, ErrorBox, PageHeader } from "../components/common/Card";
+import StatCard from "../components/dashboard/StatCard";
+import IncidentTable from "../components/dashboard/IncidentTable";
+import LoadingSpinner from "../components/common/LoadingSpinner";
+import StatusBadge from "../components/common/StatusBadge";
+import { ACTION_META, categoryLabel, formatMs, TONE_HEX, typeLabel } from "../utils/formatters";
 
-import { useState } from "react";
-
-const stats = [
-  { label: "Total Inspections", value: "2,846", change: "+12.8%", icon: "⌕" },
-  { label: "Threats Blocked", value: "184", change: "This month", icon: "🛡" },
-  { label: "Data Sanitized", value: "327", change: "This month", icon: "◈" },
-  { label: "Active Policies", value: "12", change: "All systems", icon: "▤" },
+// Validated categorical palette for the dark surface (#0d1424): fixed order, never cycled.
+const SERIES = [
+  { key: "requests", name: "Requests", color: "#0891b2" },
+  { key: "protected", name: "Masked / held", color: "#8b5cf6" },
+  { key: "blocked", name: "Blocked", color: "#d97706" },
 ];
+const AXIS = { stroke: "#334155", tick: { fill: "#94a3b8", fontSize: 11 } };
+const TOOLTIP = {
+  contentStyle: { background: "#0b1222", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, fontSize: 12 },
+  labelStyle: { color: "#e2e8f0" },
+  itemStyle: { color: "#cbd5e1" },
+  cursor: { stroke: "rgba(148,163,184,.3)" },
+};
 
-const initialIncidents = [
-  { id: "INC-1042", type: "API Key", user: "employee@company.com", severity: "Critical", decision: "Blocked", time: "2 min ago" },
-  { id: "INC-1041", type: "Personal Data", user: "analyst@company.com", severity: "Medium", decision: "Sanitized", time: "12 min ago" },
-  { id: "INC-1040", type: "Email Address", user: "employee2@company.com", severity: "Low", decision: "Sanitized", time: "28 min ago" },
-  { id: "INC-1039", type: "API Key", user: "developer@company.com", severity: "Critical", decision: "Blocked", time: "41 min ago" },
-];
+export default function AdminDashboardPage() {
+  const { token } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [incidents, setIncidents] = useState([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
-const initialPolicies = [
-  { name: "PII Protection", detail: "Detect emails, phone numbers and personal data", enabled: true },
-  { name: "API Key Detection", detail: "Prevent secret and credential leakage", enabled: true },
-  { name: "Prompt Inspection", detail: "Inspect prompts before external submission", enabled: true },
-  { name: "Custom Data Rules", detail: "Organization-specific sensitive data patterns", enabled: false },
-];
-
-const navItems = [
-  ["Overview", "▦"],
-  ["Incidents", "⚠"],
-  ["Policies", "◈"],
-  ["Users & Roles", "♙"],
-  ["Audit Logs", "≡"],
-];
-
-function Badge({ children, type = "neutral" }) {
-  const styles = {
-    Critical: "bg-rose-500/10 text-rose-300 border-rose-500/20",
-    Blocked: "bg-rose-500/10 text-rose-300 border-rose-500/20",
-    Medium: "bg-amber-500/10 text-amber-300 border-amber-500/20",
-    Low: "bg-sky-500/10 text-sky-300 border-sky-500/20",
-    Sanitized: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
-    neutral: "bg-white/5 text-slate-300 border-white/10",
-  };
-
-  return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${styles[children] || styles[type] || styles.neutral}`}>
-      {children}
-    </span>
-  );
-}
-
-function SectionTitle({ title, description, action }) {
-  return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
-        <p className="mt-1 text-sm text-slate-400">{description}</p>
-      </div>
-      {action}
-    </div>
-  );
-}
-
-export default function AdminDashboard() {
-  const [activeNav, setActiveNav] = useState("Overview");
-  const [incidents, setIncidents] = useState(initialIncidents);
-  const [policies, setPolicies] = useState(initialPolicies);
-  const [search, setSearch] = useState("");
-  const [notice, setNotice] = useState("");
-
-  const filteredIncidents = incidents.filter((incident) =>
-    `${incident.id} ${incident.type} ${incident.user} ${incident.severity}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
-  );
-
-  function togglePolicy(index) {
-    setPolicies((current) =>
-      current.map((policy, i) =>
-        i === index ? { ...policy, enabled: !policy.enabled } : policy
-      )
-    );
-    setNotice("Policy updated locally. Connect the Policies API to save this change.");
+  function load() {
+    setLoading(true);
+    setReloadKey((k) => k + 1);
   }
 
-  const navTo = (item) => {
-    setActiveNav(item);
-    setNotice("");
-  };
+  useEffect(() => {
+    let alive = true;
+    Promise.all([getDashboardStats(token, 7), getIncidents(token)])
+      .then(([s, i]) => {
+        if (!alive) return;
+        setStats(s);
+        setIncidents(i);
+        setError("");
+      })
+      .catch((e) => alive && setError(e.message))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, [token, reloadKey]);
+
+  // Auto-refresh every 20 seconds.
+  useEffect(() => {
+    const id = setInterval(() => setReloadKey((k) => k + 1), 20000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!stats) {
+    return <div>{error ? <ErrorBox message={error} /> : <LoadingSpinner />}</div>;
+  }
+
+  const t = stats.totals;
+  const trend = stats.trend.map((d) => ({ ...d, day: d.date.slice(5) }));
+  const categories = Object.entries(stats.byCategory)
+    .map(([k, v]) => ({ name: categoryLabel(k), count: v }))
+    .sort((a, b) => b.count - a.count);
+  const totalActions = Object.values(stats.byAction).reduce((a, b) => a + b, 0) || 1;
 
   return (
-    <div className="min-h-screen bg-[#080d18] text-slate-200">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0b1120] p-5 lg:flex lg:flex-col">
-          <div className="mb-10 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400/10 text-2xl text-cyan-300">
-              ⛨
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-wide text-white">CyberCup</h1>
-              <p className="text-xs text-slate-500">AI Security Gateway</p>
-            </div>
-          </div>
+    <div>
+      <PageHeader
+        eyebrow="Security overview"
+        title="AI gateway dashboard"
+        text="Every request to the AI model, what was detected and what the policy did. Updates every 20 seconds."
+        right={
+          <button onClick={load} disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </button>
+        }
+      />
+      <ErrorBox message={error} />
 
-          <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Administration
-          </p>
-
-          <nav className="space-y-1">
-            {navItems.map(([label, icon]) => (
-              <button
-                key={label}
-                onClick={() => navTo(label)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${
-                  activeNav === label
-                    ? "border border-cyan-400/20 bg-cyan-400/10 text-cyan-300"
-                    : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <span className="w-5 text-center text-lg">{icon}</span>
-                {label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="mt-auto rounded-2xl border border-cyan-400/15 bg-cyan-400/5 p-4">
-            <p className="text-sm font-semibold text-cyan-200">Security status</p>
-            <p className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Dashboard demo mode
-            </p>
-            <p className="mt-3 text-xs leading-5 text-slate-500">
-              Connect the backend to display live system status.
-            </p>
-          </div>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 bg-[#080d18]/90 px-5 py-4 backdrop-blur-xl sm:px-8">
-            <div>
-              <p className="text-xs text-slate-500">CyberCup / Admin</p>
-              <h2 className="mt-1 text-lg font-semibold text-white">{activeNav}</h2>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="hidden rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-1.5 text-xs text-emerald-300 sm:inline-flex">
-                ● Demo environment
-              </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 font-semibold text-cyan-200">
-                A
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-medium text-white">Administrator</p>
-                <p className="text-xs text-slate-500">System management</p>
-              </div>
-            </div>
-          </header>
-
-          <div className="mx-auto max-w-[1500px] p-5 sm:p-8">
-            {notice && (
-              <div className="mb-5 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-200">
-                {notice}
-              </div>
-            )}
-
-            {activeNav === "Overview" && (
-              <>
-                <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-cyan-300">SECURITY COMMAND CENTER</p>
-                    <h1 className="mt-2 text-2xl font-bold text-white sm:text-3xl">
-                      Security overview
-                    </h1>
-                    <p className="mt-2 text-sm text-slate-400">
-                      Monitor prompt inspections, incidents and security policies.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => navTo("Incidents")}
-                    className="rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
-                  >
-                    Review incidents →
-                  </button>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {stats.map((stat) => (
-                    <div key={stat.label} className="rounded-2xl border border-white/10 bg-[#101827] p-5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-400">{stat.label}</span>
-                        <span className="text-xl text-cyan-300">{stat.icon}</span>
-                      </div>
-                      <p className="mt-5 text-3xl font-bold tracking-tight text-white">{stat.value}</p>
-                      <p className="mt-2 text-xs text-emerald-300">{stat.change}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-8 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-                  <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                    <SectionTitle
-                      title="Recent security incidents"
-                      description="Latest detected sensitive-data events"
-                      action={
-                        <button onClick={() => navTo("Incidents")} className="text-sm text-cyan-300 hover:text-cyan-200">
-                          View all →
-                        </button>
-                      }
-                    />
-                    <div className="space-y-3">
-                      {incidents.slice(0, 4).map((incident) => (
-                        <div key={incident.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-white">{incident.type}</p>
-                            <p className="mt-1 break-all text-xs text-slate-500">
-                              {incident.id} · {incident.user}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge>{incident.severity}</Badge>
-                            <Badge>{incident.decision}</Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                    <SectionTitle title="Protection summary" description="Sample inspection outcomes" />
-                    <div className="space-y-5">
-                      {[
-                        ["Allowed", 76, "bg-cyan-400"],
-                        ["Sanitized", 16, "bg-emerald-400"],
-                        ["Blocked", 8, "bg-rose-400"],
-                      ].map(([label, value, color]) => (
-                        <div key={label}>
-                          <div className="mb-2 flex justify-between text-sm">
-                            <span className="text-slate-300">{label}</span>
-                            <span className="text-white">{value}%</span>
-                          </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-white/5">
-                            <div className={`h-full rounded-full ${color}`} style={{ width: `${value}%` }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-8 rounded-xl border border-amber-400/15 bg-amber-400/5 p-4">
-                      <p className="text-sm font-semibold text-amber-200">Demo data notice</p>
-                      <p className="mt-2 text-xs leading-5 text-slate-400">
-                        Statistics are illustrative. Replace them with aggregated API results before presenting live security metrics.
-                      </p>
-                    </div>
-                  </section>
-                </div>
-              </>
-            )}
-
-            {activeNav === "Incidents" && (
-              <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                <SectionTitle title="Security incidents" description="Search and review detected sensitive-data events." />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search ID, category or user..."
-                  className="mb-5 w-full rounded-xl border border-white/10 bg-[#0b1120] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-400/50"
-                />
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px] text-left text-sm">
-                    <thead className="text-xs uppercase text-slate-500">
-                      <tr>{["Incident", "Category", "User", "Severity", "Decision", "Time"].map((x) => <th key={x} className="border-b border-white/10 px-3 py-4 font-medium">{x}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {filteredIncidents.map((item) => (
-                        <tr key={item.id} className="border-b border-white/5">
-                          <td className="px-3 py-4 text-cyan-300">{item.id}</td>
-                          <td className="px-3 py-4 text-white">{item.type}</td>
-                          <td className="px-3 py-4 text-slate-400">{item.user}</td>
-                          <td className="px-3 py-4"><Badge>{item.severity}</Badge></td>
-                          <td className="px-3 py-4"><Badge>{item.decision}</Badge></td>
-                          <td className="px-3 py-4 text-slate-400">{item.time}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {filteredIncidents.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No incidents match your search.</p>}
-                </div>
-              </section>
-            )}
-
-            {activeNav === "Policies" && (
-              <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                <SectionTitle title="Security policies" description="Toggle demo policy states. Changes are local until the API is connected." />
-                <div className="space-y-3">
-                  {policies.map((policy, index) => (
-                    <div key={policy.name} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 p-4">
-                      <div>
-                        <p className="font-medium text-white">{policy.name}</p>
-                        <p className="mt-1 text-sm text-slate-400">{policy.detail}</p>
-                      </div>
-                      <button
-                        role="switch"
-                        aria-checked={policy.enabled}
-                        onClick={() => togglePolicy(index)}
-                        className={`relative h-7 w-12 rounded-full transition ${policy.enabled ? "bg-cyan-400" : "bg-slate-700"}`}
-                        aria-label={`Toggle ${policy.name}`}
-                      >
-                        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${policy.enabled ? "left-6" : "left-1"}`} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {activeNav === "Users & Roles" && (
-              <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                <SectionTitle title="Users & roles" description="Illustrative role directory. Connect a user-management API for real records." />
-                <div className="grid gap-4 md:grid-cols-3">
-                  {[
-                    ["Administrator", "ADMIN", "Manage policies, roles and security settings."],
-                    ["Security Analyst", "SECURITY_ANALYST", "Investigate incidents and monitor audit activity."],
-                    ["Employee", "EMPLOYEE", "Inspect prompts and view personal inspection history."],
-                  ].map(([name, role, description]) => (
-                    <div key={role} className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
-                      <p className="text-xs text-cyan-300">{role}</p>
-                      <h3 className="mt-3 font-semibold text-white">{name}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {activeNav === "Audit Logs" && (
-              <section className="rounded-2xl border border-white/10 bg-[#101827] p-5 sm:p-6">
-                <SectionTitle title="Audit activity" description="Example audit events for the admin interface." />
-                <div className="space-y-3">
-                  {[
-                    ["PROMPT_BLOCKED", "A prompt containing a detected credential was blocked.", "2 min ago"],
-                    ["PROMPT_SANITIZED", "Sensitive personal information was redacted.", "12 min ago"],
-                    ["POLICY_UPDATED", "A security policy was changed in demo mode.", "35 min ago"],
-                    ["USER_LOGIN", "A user authenticated to the platform.", "1 hour ago"],
-                  ].map(([action, detail, time]) => (
-                    <div key={action + time} className="flex flex-wrap justify-between gap-3 border-b border-white/5 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-white">{action}</p>
-                        <p className="mt-1 text-sm text-slate-400">{detail}</p>
-                      </div>
-                      <span className="text-xs text-slate-500">{time}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <footer className="mt-10 border-t border-white/10 pt-5 text-xs text-slate-500">
-              CyberCup · AI Security Gateway · Admin console · Sample dashboard data
-            </footer>
-          </div>
-        </main>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <StatCard label="Requests inspected" value={t.requests} detail="All time" icon={Activity} tone="cyan" />
+        <StatCard label="Incidents" value={t.incidents} detail="Flagged requests" icon={ShieldAlert} tone="amber" />
+        <StatCard label="Blocked" value={t.blocked} detail={`${t.responseBlocked} answers withheld`} icon={ShieldX} tone="rose" />
+        <StatCard label="Masked / redacted" value={t.masked} detail={`${t.responseRedacted} answers redacted`} icon={EyeOff} tone="violet" />
+        <StatCard label="Restricted retrievals" value={t.retrievalDenied} detail={`${t.documentsUsed} used documents`} icon={FileLock2} tone="sky" />
+        <StatCard label="Pending approvals" value={t.pendingApprovals} detail={<Link to="/admin/approvals" className="text-cyan-300 hover:underline">Review queue →</Link>} icon={ClipboardCheck} tone="emerald" />
       </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardTitle title="Requests over the last 7 days" subtitle="Inspected, protected (masked or held) and blocked" />
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trend} margin={{ top: 5, right: 12, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="rgba(148,163,184,.08)" vertical={false} />
+                <XAxis dataKey="day" {...AXIS} tickLine={false} />
+                <YAxis allowDecimals={false} {...AXIS} tickLine={false} axisLine={false} />
+                <Tooltip {...TOOLTIP} />
+                <Legend wrapperStyle={{ fontSize: 12, color: "#cbd5e1" }} iconType="plainline" />
+                {SERIES.map((s) => (
+                  <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2}
+                        dot={{ r: 4, strokeWidth: 2, stroke: "#0d1424" }} activeDot={{ r: 5 }} />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <CardTitle title="Actions taken" subtitle="Share of all requests" />
+          <ul className="space-y-3">
+            {Object.entries(stats.byAction).map(([action, count]) => (
+              <li key={action}>
+                <div className="flex items-center justify-between text-xs">
+                  <StatusBadge action={action} />
+                  <span className="tabular-nums text-slate-300">{count}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/5">
+                  <div className="h-full rounded-full" style={{
+                    width: `${(count / totalActions) * 100}%`,
+                    background: TONE_HEX[ACTION_META[action]?.tone] || "#94a3b8",
+                  }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card>
+          <CardTitle title="Data categories" subtitle="Requests containing each category" />
+          {categories.length === 0 ? <p className="text-sm text-slate-500">No detections yet.</p> : (
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categories} layout="vertical" margin={{ top: 0, right: 16, left: 10, bottom: 0 }}>
+                  <CartesianGrid stroke="rgba(148,163,184,.08)" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} {...AXIS} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={118} {...AXIS} tickLine={false} axisLine={false} />
+                  <Tooltip {...TOOLTIP} cursor={{ fill: "rgba(148,163,184,.06)" }} />
+                  <Bar dataKey="count" name="Requests" fill="#0891b2" radius={[0, 4, 4, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle title="Most detected types" />
+          {stats.topTypes.length === 0 ? <p className="text-sm text-slate-500">No detections yet.</p> : (
+            <ol className="space-y-2">
+              {stats.topTypes.map((x, i) => (
+                <li key={x.type} className="flex items-center justify-between rounded-lg bg-white/[0.02] px-3 py-2 text-sm">
+                  <span className="text-slate-300"><span className="mr-2 text-xs text-slate-600">{i + 1}</span>{typeLabel(x.type)}</span>
+                  <span className="tabular-nums text-slate-400">{x.count}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle title="Added delay" subtitle="Security checks vs. the whole request" />
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              ["Engine p50", stats.latency.engineP50],
+              ["Engine p95", stats.latency.engineP95],
+              ["End-to-end p50", stats.latency.totalP50],
+              ["End-to-end p95", stats.latency.totalP95],
+            ].map(([label, v]) => (
+              <div key={label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <p className="flex items-center gap-1 text-[11px] text-slate-500"><Timer className="h-3 w-3" />{label}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-white">{formatMs(v)}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            End-to-end time includes the AI model&apos;s own answer time. Active policies: {t.activePolicies}.
+          </p>
+        </Card>
+      </div>
+
+      <Card className="mt-6">
+        <CardTitle title="Recent incidents" right={<Link to="/admin/incidents" className="text-xs text-cyan-300 hover:underline">All incidents →</Link>} />
+        <IncidentTable incidents={incidents.slice(0, 8)} />
+      </Card>
     </div>
   );
 }

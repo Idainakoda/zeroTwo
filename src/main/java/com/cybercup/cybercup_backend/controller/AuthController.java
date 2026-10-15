@@ -56,18 +56,15 @@ public class AuthController {
 
     @GetMapping("/me")
     public AuthMeResponse getCurrentUser(Authentication authentication) {
-
-        List<String> roles = authentication.getAuthorities()
-                .stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
-
-        return new AuthMeResponse(
-                null,
-                authentication.getName(),
-                authentication.getName(),
-                roles
-        );
+        User user = userService.getById(
+                com.cybercup.cybercup_backend.web.CurrentUser.id(authentication));
+        List<String> roles = user.getRoles().stream()
+                .map(r -> r.getName()).sorted().toList();
+        AuthMeResponse response = new AuthMeResponse(
+                user.getId(), user.getFullName(), user.getEmail(), roles);
+        response.setDepartment(user.getDepartment());
+        response.setClearance(user.getClearance());
+        return response;
     }
 
 }

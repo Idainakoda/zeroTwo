@@ -77,7 +77,14 @@ NAME_STOPWORDS = {
     "india", "bharat", "dear", "sir", "madam", "regards", "hello", "hi", "thanks", "kindly",
     "please", "draft", "write", "summarise", "summarize", "python", "java", "javascript",
     "mobile", "a/c", "dob", "vid", "kyc", "rti", "ai", "llm",
+    # programming words spaCy mistakes for names in code snippets
+    "string", "integer", "int", "long", "boolean", "bool", "double", "float", "char", "object", "list",
+    "map", "set", "dict", "tuple", "array", "arraylist", "hashmap", "optional", "void", "null", "none",
+    "true", "false", "override", "autowired", "system", "exception", "public", "private", "static",
+    "final", "class", "return", "import", "select", "insert", "update", "values", "where", "from",
+    "json", "yaml", "http", "https", "api", "url", "uri", "sql", "mysql", "spring", "react", "node",
 }
+NAME_TRIM = "\"'`.,;:()[]{}<>!?*_-"
 
 
 class _Presidio:
@@ -117,15 +124,20 @@ def _person_findings(text: str) -> list[Finding]:
         return []
     out = []
     for r in presidio.engine.analyze(text=text, entities=["PERSON"], language="en", score_threshold=0.6):
-        value = text[r.start:r.end].strip()
+        # Trim quotes / punctuation NER sometimes includes, so masking never breaks code like 'Sunita Sharma'.
+        raw = text[r.start:r.end]
+        start = r.start + (len(raw) - len(raw.lstrip(NAME_TRIM + " \n\t")))
+        end = r.end - (len(raw) - len(raw.rstrip(NAME_TRIM + " \n\t")))
+        value = text[start:end]
         words = value.split()
         if (len(value) < 3 or any(ch.isdigit() for ch in value) or value.isupper()
                 or value.lower() in NAME_STOPWORDS or any(w.lower() in NAME_STOPWORDS for w in words)
-                or not value[0].isupper() or inside_placeholder(text, r.start, r.end)):
+                or any(ch in value for ch in "=;{}()<>/\\") or not value[0].isupper()
+                or inside_placeholder(text, start, end)):
             continue
         out.append(Finding(
             category=Category.PII, type="PERSON", severity=1, confidence=round(r.score, 2),
-            start=r.start, end=r.end, detector="presidio-ner", redactable=True,
+            start=start, end=end, detector="presidio-ner", redactable=True,
             preview=value[0] + "*" * (len(value) - 1), value_hash=value_hash(value),
         ))
     return out

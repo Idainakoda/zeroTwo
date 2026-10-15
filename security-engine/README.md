@@ -55,7 +55,10 @@ API docs: http://localhost:8000/docs · Health: http://localhost:8000/health
 | POST | `/v1/analyze/prompt` | `{prompt, user:{user_id, role, department, clearance}, deep_scan}` |
 | POST | `/v1/analyze/response` | `{request_id, response, user}`. Use the `request_id` from the prompt call |
 | POST | `/v1/analyze/document` | `{chunks:[...], source}` for uploaded files and RAG chunks |
+| POST | `/v1/rag/search` | `{query, user:{clearance, department}}`: clearance-filtered retrieval, with an `unauthorised_attempt` flag and scanned, spotlighted `context` |
+| GET | `/v1/rag/documents` | knowledge-base documents (`?clearance=&department=` adds an `accessible` flag) |
 | POST | `/v1/eval/run` | runs the evaluation set and returns metrics (for the dashboard) |
+| POST | `/v1/eval/blind` | blind reworded-attack set with the per-layer comparison |
 | POST | `/v1/policy/reload` | reloads `policy.yaml` |
 
 Example `/v1/analyze/prompt` response (shortened):
@@ -86,15 +89,15 @@ Example `/v1/analyze/prompt` response (shortened):
 
 There are two sets:
 
-- **Development set** `evaluation/testset.json`: 118 cases (47 legitimate, 71 adversarial) covering prompts, documents and AI responses. The rules were tuned on it.
+- **Development set** `evaluation/testset.json`: 123 cases (48 legitimate, 75 adversarial) covering prompts, documents and AI responses. The rules were tuned on it.
 - **Blind set** `evaluation/blind_set.json`: 30 unseen attacks and 30 legitimate look-alikes, written before the ML layers were built and kept out of `attack_library.json`. Run it with `python -m evaluation.blind`.
 
 Development set, all layers except Llama:
 
 | Metric | Value |
 |---|---|
-| Detection accuracy | 98.3 % |
-| Precision / Recall | 100 % / 97.2 % |
+| Detection accuracy | 98.4 % |
+| Precision / Recall | 100 % / 97.3 % |
 | False-positive rate | 0.0 % |
 | Added latency (CPU laptop) | p50 ≈ 130 ms, p95 ≈ 280 ms (rules alone: p95 ≈ 12 ms) |
 | Misses | C06, C07: confidential business context, which needs the local Llama layer |

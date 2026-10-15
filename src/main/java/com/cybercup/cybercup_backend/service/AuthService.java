@@ -47,7 +47,7 @@ public class AuthService {
 
         String token = jwtService.generateToken(user);
 
-        return new LoginResponse(
+        LoginResponse response = new LoginResponse(
                 token,
                 user.getId(),
                 user.getFullName(),
@@ -58,5 +58,8 @@ public class AuthService {
                         .sorted()
                         .collect(Collectors.toList())
         );
+        response.setDepartment(user.getDepartment());
+        response.setClearance(user.getClearance());
+        return response;
     }
 }

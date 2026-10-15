@@ -1,0 +1,77 @@
+# CyberCup: AI Security Gateway (CC6-AI03)
+
+A gateway that sits between employees and an AI model. It inspects every prompt and every answer, masks or blocks sensitive data, stops prompt-injection attacks, enforces document access by clearance, and keeps a privacy-safe, tamper-evident audit trail. Legitimate work carries on.
+
+```
+Employee ─▶ React frontend ─▶ Spring Boot backend ──▶ Security engine (FastAPI)
+                                   │   policy, approvals,     rules + ML + Presidio + RAG access control
+                                   │   audit chain, dashboard
+                                   ├──▶ External AI (Gemini) or local model (Ollama)
+                                   └──▶ MySQL / H2
+```
+
+| Folder | What it is |
+|---|---|
+| `frontend/` | React + Vite + Tailwind: secure assistant, admin dashboard, incidents, approvals, audit log, policies, users, evaluation lab |
+| `src/` (root) | Spring Boot 4 backend: authentication (JWT), policy enforcement, the gateway flow, approvals, hash-chained audit log, dashboard statistics |
+| `security-engine/` | Python FastAPI engine: detection layers, masking, response inspection, document quarantine, access-controlled retrieval, evaluation sets. See [its README](security-engine/README.md) |
+| `docs/` | System workflow and design notes |
+
+## Run it (Windows)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup.ps1    # once: tools, Python env + models (~2 GB), packages, .env
+powershell -ExecutionPolicy Bypass -File .\start.ps1    # every time: engine :8000, backend :8080, frontend :5173
+```
+
+`setup.ps1` uses Java 21 and Node 22 if they are installed. If not, it downloads portable copies into `.\tools`, so no admin rights are needed. Python 3.11 or 3.12 must be installed.
+
+- **AI answers:** paste a Gemini key into `.env` (`GEMINI_API_KEY=...`, free at aistudio.google.com). Without a key, every security check still runs. Answers come from the local model if [Ollama](https://ollama.com) is running (`ollama pull llama3.2:3b`).
+- **Database:** the default `DB_PROFILE=local` uses a file database in `./data`, so nothing needs installing. For MySQL, set `DB_PROFILE=mysql` and `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` in `.env`.
+- **Fail-closed:** if the security engine is down, requests are blocked, never forwarded.
+
+### Demo accounts (seeded locally; disable with `app.seed-demo=false`)
+
+| Account | Role | Department | Clearance | Password |
+|---|---|---|---|---|
+| asha@cybercup.demo | Employee | Revenue | INTERNAL | Asha@2026 |
+| meera@cybercup.demo | Employee | Finance | CONFIDENTIAL | Meera@2026 |
+| analyst@cybercup.demo | Security analyst | SOC | SECRET | Analyst@2026 |
+| admin@cybercup.demo | Admin | SOC | SECRET | Admin@2026 |
+
+The login page has one-click buttons for these accounts.
+
+## Demo script (the three required scenarios)
+
+Sign in as **Asha** and use the scenario buttons above the chat box. The **Security inspector** on the right shows each step, the detection layers, the findings and the policy that fired.
+
+1. **Accidental disclosure of personal data:** click *Personal data*. Aadhaar (checksum-validated), PAN, phone and name are replaced with `<AADHAAR_1>`-style placeholders before Gemini sees them. Expand *What the AI model received* to show this. The answer comes back with the real values restored for Asha only. *API key in code* shows credentials being **redacted** permanently.
+2. **Prompt-injection extraction:** click *Prompt injection*, *Hinglish attack* or *Reworded attack*. All are **blocked** before reaching the model, and the inspector shows which layer caught each (rules, semantic similarity, ML classifier). *Hidden instruction in CV* shows an **indirect** injection: the poisoned section of the attached document is quarantined and the rest is summarised.
+3. **Unauthorised retrieval of a restricted document:** click *Restricted document* (with "Use department documents" on). Asha (INTERNAL) is **denied** and the attempt is logged. Sign in as **Meera** (CONFIDENTIAL, Finance) and ask the same question: she gets the answer, citing *Draft Departmental Budget 2027-28*. Restricted documents are filtered **before** the search runs, so their text never reaches the AI. Answers are also checked against restricted documents as a second layer.
+
+Then sign in as **Admin**:
+- **Overview:** incidents, data categories, blocked requests, trends and added delay.
+- **Approvals:** *Classified note* (sent as Asha) is held here. Approve it and Asha sees the answer under *My Activity*.
+- **Policies:** change any action (allow / warn / mask / redact / require approval / block). It applies to the next request.
+- **Audit Log → Verify chain integrity:** proves no entry was edited. Entries hold types, counts and keyed hashes, never the values.
+- **Users & clearance:** raise Asha to CONFIDENTIAL and retry scenario 3.
+- **Evaluation Lab:** runs the 123-case test set and the blind set of reworded attacks live.
+
+## How the requirements are met
+
+| Requirement | Where |
+|---|---|
+| 1. Prompt inspection (Aadhaar, PAN, phone, financial, passwords, API keys, confidential content) | `security-engine/app/detectors/` (checksum validators, Presidio, secret signatures, classification markings, codenames) |
+| 2. Response inspection | engine `analyze_response`: canary leak, instruction disclosure, other people's data, restricted-document text |
+| 3. Prompt injection incl. indirect | rules (English / Hinglish / Hindi) + normaliser (base64, leetspeak, homoglyphs…) + multilingual semantic similarity + DeBERTa classifier + optional local Llama; document quarantine |
+| 4. Access-controlled RAG | `security-engine/app/rag.py`: clearance + department filter before retrieval, attempt detection, output fingerprint check |
+| 5. Configurable actions | `PolicyDecisionService` + Policies page: ALLOW, WARN, MASK, REDACT, REQUIRE_APPROVAL, BLOCK |
+| 6. Privacy-aware audit log | `AuditLogService`: no content, HMAC hashes, SHA-256 hash chain with verification |
+| 7. Dashboard | Admin overview, incidents, approvals, audit log |
+| Detection metrics (≥ 30 prompts) | 123-case development set + 60-case blind set, live in the Evaluation Lab or via `python -m evaluation.run` |
+
+**Latest measured results** (rules + ML layers, local model off):
+- **Development set:** 98.4 % detection accuracy, 100 % precision, 0 % false positives.
+- **Blind reworded attacks:** 25 / 30 blocked with 0 / 30 legitimate prompts blocked, up from 8 / 30 with rules alone.
+
+Engine delay is about 0.3 s (p50) on a laptop CPU. See the engine README for the honest caveats.

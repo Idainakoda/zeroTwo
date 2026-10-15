@@ -66,9 +66,9 @@ class _MlInjection:
             lib = json.loads(LIBRARY.read_text(encoding="utf-8"))
             attacks = [(label, text) for label, items in lib["attacks"].items() for text in items]
             self.attack_labels = [label for label, _ in attacks]
-            self.attack_vecs = self.embedder.encode([t for _, t in attacks], normalize_embeddings=True,
+            self.attack_vecs = self.embedder.encode([t for _, t in attacks], normalize_embeddings=True, show_progress_bar=False,
                                                     convert_to_tensor=True)
-            self.benign_vecs = self.embedder.encode(lib["benign"], normalize_embeddings=True,
+            self.benign_vecs = self.embedder.encode(lib["benign"], normalize_embeddings=True, show_progress_bar=False,
                                                     convert_to_tensor=True)
             log.info("Semantic layer loaded (%d attack / %d benign examples)", len(attacks), len(lib["benign"]))
         except Exception as exc:  # pragma: no cover - depends on environment
@@ -123,7 +123,7 @@ class _MlInjection:
         segments = []
         for text in texts:
             segments.extend(self._segments(text))
-        vecs = self.embedder.encode(segments, normalize_embeddings=True, convert_to_tensor=True)
+        vecs = self.embedder.encode(segments, normalize_embeddings=True, show_progress_bar=False, convert_to_tensor=True)
         att = util.cos_sim(vecs, self.attack_vecs)        # segments x attacks
         ben = util.cos_sim(vecs, self.benign_vecs)        # segments x benign
         best = 0.0

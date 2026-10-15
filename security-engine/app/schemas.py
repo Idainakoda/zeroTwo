@@ -74,6 +74,8 @@ class PromptAnalysis(BaseModel):
     reasons: list[str]
     findings: list[Finding]
     sanitized_prompt: Optional[str] = None   # only when decision == SANITIZE
+    masked_prompt: Optional[str] = None      # always: every redactable value replaced (None if masking is unsafe)
+    residual_risk: bool = False              # sensitive data survived masking -> must not be forwarded
     system_prompt_addon: str = ""            # canary + safety rules to prepend to the LLM system prompt
     layer_scores: dict = {}                  # injection score per layer: rules, semantic, classifier, fused
     llm: LlmVerdict = LlmVerdict()
@@ -85,6 +87,13 @@ class ResponseRequest(BaseModel):
     request_id: str = ""                     # from the prompt analysis, enables re-hydration + canary check
     response: str = Field(..., max_length=200_000)
     user: UserContext = UserContext()
+    rehydrate: bool = True                   # False for the REDACT action: placeholders stay redacted
+
+
+class RagSearchRequest(BaseModel):
+    query: str = Field(..., max_length=20_000)
+    user: UserContext = UserContext()
+    top_k: int = 4
 
 
 class ResponseAnalysis(BaseModel):

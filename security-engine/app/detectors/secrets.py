@@ -19,14 +19,21 @@ KEY_PATTERNS = [
     ("STRIPE_KEY", r"\b(?:sk|rk|pk)_(?:live|test)_[0-9A-Za-z]{20,}", 4, 0.97, True),
     ("RAZORPAY_KEY", r"\brzp_(?:live|test)_[0-9A-Za-z]{10,}", 4, 0.97, True),
     ("JWT", r"\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}", 3, 0.93, True),
+    ("BASIC_AUTH_CREDENTIALS", r"(?:\s-u|--user)\s+['\"]?[^\s:'\"]+:([^\s'\"]{4,})", 4, 0.95, True),
+    ("URL_CREDENTIALS", r"\bhttps?://[^\s:/@]+:([^\s@/]{3,})@", 4, 0.95, True),
     ("CONNECTION_STRING", r"\b(?:mysql|postgres(?:ql)?|mongodb(?:\+srv)?|redis|amqp|mssql|jdbc:[a-z]+)://[^\s:/@]+:[^\s@]+@[^\s]+", 4, 0.97, True),
 ]
 _COMPILED = [(t, re.compile(p), s, c, r) for t, p, s, c, r in KEY_PATTERNS]
 
+# Key names such as password, DB_PASSWORD, JWT_SECRET, spring.datasource.password, dbPassword, "api_key":
+SECRET_WORD = (r"password|passwd|pwd|passcode|pass|secret|token|api[_\-]?key|access[_\-]?key|private[_\-]?key|"
+               r"auth[_\-]?key|secret[_\-]?key|client[_\-]?secret|credentials?|pin")
 PASSWORD_ASSIGN = re.compile(
-    r"(?i)\b(password|passwd|pwd|passcode|pass|secret|token|api[_\-]?key|access[_\-]?key|client[_\-]?secret|pin)"
-    r"\s*(?:[:=]|=>|is|was|hai|:-)\s*['\"]?([^\s'\",;]{4,})"
+    r"(?i)(?<![A-Za-z0-9])((?:[A-Za-z0-9]+[_\-.]|(?-i:[a-z0-9]+(?=[A-Z])))*"
+    rf"(?:{SECRET_WORD})(?:[_\-.][A-Za-z0-9]+)*)(?![A-Za-z0-9])"
+    r"['\"]?\s*(?:[:=]|=>|:=|is|was|hai|:-)\s*['\"`]?([^\s'\"`,;]{4,})"
 )
+PASSWORD_WORDS = re.compile(r"(?i)pass|pwd|pin")
 PLACEHOLDER_VALUES = re.compile(
     r"^(?:\*+|x+|\.+|<[^>]*>|\{[^}]*\}|\$\{?[A-Z_]+\}?|%[A-Z_]+%|your[_\-]?\w*|changeme|example\w*|"
     r"password|secret|token|none|null|empty|required|incorrect|wrong|expired|invalid|not|reset|forgotten|"
@@ -72,11 +79,15 @@ def detect(text: str) -> list[Finding]:
         # Code like `password = user_input` or `token = request.headers.get(` is not a secret.
         if re.search(r"[()\[\]]", value) or re.fullmatch(r"[A-Za-z_][A-Za-z_.]*", value):
             continue
+        key = m.group(1)
+        if re.search(r"(?i)pin[_\-.]?code|pincode|token[_\-.]?(?:count|limit|length|type|url|endpoint)", key):
+            continue                                   # postal PIN codes, token limits, ...
         if not _strong_value(value):
             continue
         taken.append((s, e))
         findings.append(Finding(
-            category=Category.SECRET, type="PASSWORD", severity=4, confidence=0.88,
+            category=Category.SECRET, type="PASSWORD" if PASSWORD_WORDS.search(key) else "SECRET_VALUE",
+            severity=4, confidence=0.88,
             start=s, end=e, detector="secret-assignment", redactable=True,
             preview="*" * min(len(value), 8), value_hash=value_hash(value),
             reason=f"value assigned to '{m.group(1).lower()}'",

@@ -1,13 +1,15 @@
-
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useState,
 } from "react";
 import {
   loginUser,
   registerUser,
 } from "../services/authService";
+import { UNAUTHORIZED_EVENT } from "../services/apiClient";
 
 const AuthContext = createContext(null);
 
@@ -23,34 +25,55 @@ function readStoredUser() {
   }
 }
 
+function readStoredToken() {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(readStoredUser);
-  const [token, setToken] = useState(
-    () => sessionStorage.getItem(TOKEN_KEY)
-  );
+  const [token, setToken] = useState(readStoredToken);
+
+  const logout = useCallback(() => {
+    try {
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(USER_KEY);
+    } catch {
+      // storage unavailable: state reset below is enough
+    }
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  // Any API call that returns 401 (expired token) signs the user out.
+  useEffect(() => {
+    window.addEventListener(UNAUTHORIZED_EVENT, logout);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, logout);
+  }, [logout]);
 
   async function login(email, password) {
     const data = await loginUser(email, password);
-
-    sessionStorage.setItem(TOKEN_KEY, data.token);
-    sessionStorage.setItem(
-      USER_KEY,
-      JSON.stringify({
-        userId: data.userId,
-        fullName: data.fullName,
-        email: data.email,
-        roles: data.roles,
-      })
-    );
-
-    setToken(data.token);
-    setUser({
+    const profile = {
       userId: data.userId,
       fullName: data.fullName,
       email: data.email,
       roles: data.roles,
-    });
+      department: data.department,
+      clearance: data.clearance,
+    };
 
+    try {
+      sessionStorage.setItem(TOKEN_KEY, data.token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(profile));
+    } catch {
+      // keep the session in memory only
+    }
+
+    setToken(data.token);
+    setUser(profile);
     return data;
   }
 
@@ -58,17 +81,13 @@ export function AuthProvider({ children }) {
     return registerUser(fullName, email, password);
   }
 
-  function logout() {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(USER_KEY);
-    setToken(null);
-    setUser(null);
-  }
-
+  const roles = user?.roles || [];
   const value = {
     user,
     token,
     isAuthenticated: Boolean(token && user),
+    isAdmin: roles.includes("ADMIN"),
+    isMonitor: roles.includes("ADMIN") || roles.includes("SECURITY_ANALYST"),
     login,
     register,
     logout,
@@ -81,6 +100,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
 
