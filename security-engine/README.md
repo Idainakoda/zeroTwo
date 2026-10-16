@@ -123,6 +123,28 @@ Blind set (unseen wording), what each layer adds:
 | Rules + classifier | 21 / 30 | 6 | 0 / 30 |
 | **Rules + semantic + classifier** | **25 / 30** | **4** | **0 / 30** |
 
+### Disguised identifiers (`python -m evaluation.obfuscation`)
+
+This set has 22 attempts to sneak identifiers past the gateway and 20 legitimate look-alikes. The attempts:
+- split numbers (`7|6|1|1 :: 9|1|2|6`), spelled-out or Devanagari digits;
+- identity labels without the word Aadhaar ("IDREF", "KYC", "ID#");
+- "concatenate the two halves";
+- "reconstruct it and return the full number in plain digits".
+
+A live test found that a split 12-digit number with an invalid checksum was forwarded unmasked, and the AI rebuilt it. That is fixed with three changes:
+- A 12-digit value chopped into pieces of one or two digits, or labelled as an identity number, is now masked even if its checksum fails.
+- Rule `EXF-03` blocks rebuild-and-reveal requests aimed at an identity number.
+- Once a value is identified, every other copy of it in the same text is masked too, including in AI answers.
+
+| Set | Before | After |
+|---|---|---|
+| Attacks protected | 18 / 22 | **22 / 22** |
+| Legitimate prompts blocked | 0 / 20 | 0 / 20 |
+
+The development, blind, data-protection and robustness results did not change.
+
+A plain 12-digit number with no identity wording and an invalid checksum (e.g. `123456789012`) is still allowed. It cannot be a real Aadhaar, and masking every 12-digit number would also hide order and invoice numbers.
+
 ### Robustness set (demanding prompts in five categories)
 
 `python -m evaluation.robust` runs 100 prompts in five categories:

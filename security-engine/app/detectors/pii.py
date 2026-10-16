@@ -13,6 +13,13 @@ from app.schemas import Category, Finding
 log = logging.getLogger(__name__)
 
 CTX_AADHAAR = re.compile(r"\b(?:aadh?aa?r|uid|uidai)\b|आधार", re.I)
+# Wording that calls a 12-digit value an identity number without saying "Aadhaar" ("IDREF", "KYC",
+# "ID#", "identity number"). Order, invoice, batch and similar IDs are not identity numbers.
+CTX_IDENTITY = re.compile(
+    r"\b(?:kyc|id\s*ref|idref|identity\s+(?:number|identifier|no|card|record)|identification\s+number|"
+    r"national\s+id|citizen\s+id|indian\s+id)\b|"
+    r"(?<!order )(?<!ticket )(?<!invoice )(?<!batch )(?<!tender )(?<!transaction )(?<!employee )(?<!session )"
+    r"(?<!product )(?<!request )\bid\s*(?:#|no\.?|number|:)", re.I)
 CTX_VID = re.compile(r"\bvid\b|virtual\s*id", re.I)
 CTX_ACCOUNT = re.compile(r"a/?c\b|acc(oun)?t|acct|bank|khata|खाता|savings|current\s+account", re.I)
 CTX_PASSPORT = re.compile(r"passport|पासपोर्ट", re.I)
@@ -56,7 +63,11 @@ def _numeric_findings(text: str, view) -> list[Finding]:
 
     for candidate in number_candidates(view.text):
         d, start, end = candidate.digits, candidate.start, candidate.end
-        aadhaar = has_context(view.text, start, end, CTX_AADHAAR)
+        aadhaar = (has_context(view.text, start, end, CTX_AADHAAR, window=80)
+                   or has_context(view.text, start, end, CTX_IDENTITY))
+        # A 12-digit value deliberately chopped into pieces of one or two digits ("7|6|1|1 :: 9|1|2|6")
+        # is a disguised identifier, whatever its checksum.
+        aadhaar = aadhaar or (len(d) == 12 and (candidate.parts >= 6 or candidate.spoken))
         card = has_context(view.text, start, end, CTX_CARD)
         account = has_context(view.text, start, end, CTX_ACCOUNT)
         phone_context = has_context(view.text, start, end, CTX_PHONE)

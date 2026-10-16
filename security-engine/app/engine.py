@@ -158,7 +158,26 @@ def _still_suspicious_without_judge(masked_text: str, layers: dict, inj, norm) -
 
 
 def _detect_data(text: str) -> list[Finding]:
-    return resolve_overlaps(pii.detect(text) + secrets.detect(text) + confidential.detect(text))
+    found = pii.detect(text) + secrets.detect(text) + confidential.detect(text)
+    return resolve_overlaps(found + _other_copies(text, found))
+
+
+def _other_copies(text: str, findings: list[Finding]) -> list[Finding]:
+    """Every other copy of a value already identified as sensitive, e.g. an identifier recognised from
+    the word "Aadhaar" next to it and repeated later where no such word is near."""
+    extra = []
+    for f in findings:
+        if not (f.redactable and f.start >= 0 and f.category in (Category.PII, Category.FINANCIAL)):
+            continue
+        digits = re.sub(r"\D", "", text[f.start:f.end])
+        if len(digits) < 8:
+            continue
+        pattern = r"(?<![0-9])" + r"[\s.\-/|_:]{0,3}".join(digits) + r"(?![0-9])"
+        for m in re.finditer(pattern, text):
+            if not any(o.start <= m.start() < o.end for o in findings):
+                extra.append(f.model_copy(update={"start": m.start(), "end": m.end(),
+                                                  "reason": "another copy of an identified value"}))
+    return extra
 
 
 def _risk_score(findings: list[Finding], inj_score: float) -> int:

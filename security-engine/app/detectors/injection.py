@@ -113,6 +113,16 @@ RULES: list[InjRule] = [
     InjRule("IND-04", "INDIRECT_INJECTION", _r(r"\bwhen\s+(?:you\s+)?(?:summari[sz]|process|read|analy[sz])(?:e|ing)?\s+this\s+(?:document|file|email|page|resume|cv|text)\b.{0,80}\b(?:ignore|instead|do not|don'?t|must|always|never|say|tell|rate|recommend)"), 0.65),
     InjRule("EXF-01", "DATA_EXFILTRATION", _r(r"\b(?:send|forward|email|post|upload|exfiltrate|transmit|leak|copy)\b.{0,60}\b(?:to|at|into)\s+(?:https?://|\S+@\S+\.\w+|this (?:url|link|address|webhook))"), 0.6),
     InjRule("EXF-02", "DATA_EXFILTRATION", _r(r"!\[[^\]]*\]\(https?://[^)]*[?&][^)]*=[^)]*\)"), 0.6),
+    # Getting the AI to undo the gateway's masking: rebuild a split / disguised identity number and hand it
+    # back in plain digits. Needs all three parts: a rebuild verb, an identity target, a plain/full output.
+    InjRule("EXF-03", "DATA_EXFILTRATION", _r(
+        r"^(?=[\s\S]*\b(?:reconstruct|rebuild|reassembl|rejoin|recombin|concatenat|merg|join|restor|recover|"
+        r"de-?obfuscat|unscrambl|revers|strip|remov)\w*)"
+        r"(?=[\s\S]*\b(?:identity|identifier|aadh?aa?r|uid|kyc|pan|id(?:\s*(?:#|no|number|ref))?|idref|ssn|"
+        r"card\s+number|account\s+number)\b)"
+        r"(?=[\s\S]*(?:\b(?:plain|full|raw|unmasked|complete|clear|cleaned|original|real)\s+(?:\w+\s+){0,2}?"
+        r"(?:digits|number|value|id|identifier)\b|\bunmasked\b|\bwithout\s+(?:masking|redaction|placeholders)\b|"
+        r"\bin\s+(?:plain\s+)?digits\b))"), 0.8),
 
     # --- Weak signals: not enough to block, but enough to ask the local Llama (grey zone) ---
     InjRule("SUS-01", "SUSPICIOUS_META_REQUEST", _r(r"\b(?:above|before this|earlier|initial|hidden|secret|internal|original)\b.{0,40}\b(?:instructions?|prompt|rules|configuration|guidelines|context)\b.{0,40}\b(?:print|show|repeat|reveal|tell|output|give|share|list)\b"), 0.3),

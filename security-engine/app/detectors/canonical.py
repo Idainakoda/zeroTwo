@@ -64,6 +64,7 @@ class NumberCandidate:
     start: int
     end: int
     spoken: bool
+    parts: int = 1          # how many separate tokens the number was assembled from
 
 
 def number_candidates(text: str) -> list[NumberCandidate]:
@@ -78,7 +79,7 @@ def number_candidates(text: str) -> list[NumberCandidate]:
             start, end = items[0][1], items[-1][2]
             if ((start == 0 or not text[start - 1].isalnum() and text[start - 1] != "_")
                     and (end == len(text) or not text[end].isalnum() and text[end] != "_")):
-                out.append(NumberCandidate(digits, start, end, any(item[3] for item in items)))
+                out.append(NumberCandidate(digits, start, end, any(item[3] for item in items), len(items)))
         elif len(digits) > 19 and any(item[4] for item in items[1:]):
             # Too long to be one identifier, so the newlines separate values (a date on one
             # line, an Aadhaar number on the next, as on a scanned card): check each line.
