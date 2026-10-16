@@ -73,6 +73,10 @@ def redact(text: str, findings: list[Finding], reversible: bool = True) -> tuple
 def rehydrate(text: str, mapping: dict[str, str]) -> str:
     for placeholder, value in mapping.items():
         text = text.replace(placeholder, value)
+        # Models sometimes drop the POSSIBLE_ prefix (<POSSIBLE_AADHAAR_1> -> <AADHAAR_1>).
+        short = placeholder.replace("<POSSIBLE_", "<", 1)
+        if short != placeholder and short not in mapping:
+            text = text.replace(short, value)
     return text
 
 

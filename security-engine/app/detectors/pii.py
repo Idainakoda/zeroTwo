@@ -46,6 +46,11 @@ PAN_FLEXIBLE = re.compile(
     rf"{DIGIT}{IDENTIFIER_GAP}{DIGIT}{IDENTIFIER_GAP}{DIGIT}{IDENTIFIER_GAP}{DIGIT}{IDENTIFIER_GAP}[A-Z](?!\w)", re.I
 )
 IDENTIFIER_SEPARATORS = re.compile(r"[\s.\-‐‑‒–—―/|_]+")
+# 10 to 16 digits with junk between them: up to four symbols or spaces (not a blank line), or one letter
+# ("123 @ 4 # 567", "1a2b3c", "4918x6372x5014", "4🙂9🙂1").
+JUNK_SPLIT_NUMBER = re.compile(
+    r"(?<![0-9A-Za-z])[0-9](?:(?:[^\w\n]|\n(?!\n)|_){0,4}[0-9]|[A-Za-z][0-9]){9,15}(?![0-9])")
+ODD_SYMBOL = re.compile(r"[^0-9\s.\-‐‑‒–—―/\\_|,:·•()\[\]]")
 DIGIT_WORD_PATTERN = re.compile(rf"(?<!\w)(?:{WORD_ALTERNATIVES})(?!\w)", re.I)
 
 
@@ -94,6 +99,28 @@ def _numeric_findings(text: str, view) -> list[Finding]:
         if (len(local) == 10 and local[0] in "6789" and len(set(local)) > 1
                 and (not candidate.spoken or phone_context)):
             add("PHONE_IN", Category.PII, start, end, 0.94 if phone_context else 0.85)
+
+    # Digits padded with junk symbols ("123@4#567$8%901&2"): ordinary separators are handled above;
+    # a run broken up by other symbols is joined here, but only kept with a checksum or a label,
+    # so sums like "1200+3400+5600" stay untouched.
+    for match in JUNK_SPLIT_NUMBER.finditer(view.text):
+        raw = match.group()
+        if not ODD_SYMBOL.search(raw):
+            continue
+        d = re.sub(r"\D", "", raw)
+        start, end = match.span()
+        if len(d) == 12:
+            labelled = (has_context(view.text, start, end, CTX_AADHAAR, window=80)
+                        or has_context(view.text, start, end, CTX_IDENTITY))
+            if v.aadhaar_valid(d):
+                add("AADHAAR", Category.PII, start, end, 0.97)
+            elif labelled:
+                add("POSSIBLE_AADHAAR", Category.PII, start, end, 0.8,
+                    "Aadhaar-labelled number hidden with symbols; masked conservatively")
+        elif len(d) == 10 and d[0] in "6789" and has_context(view.text, start, end, CTX_PHONE):
+            add("PHONE_IN", Category.PII, start, end, 0.85)
+        elif len(d) == 16 and v.luhn_valid(d) and has_context(view.text, start, end, CTX_CARD):
+            add("CREDIT_CARD", Category.FINANCIAL, start, end, 0.9)
 
     for match in PAN_FLEXIBLE.finditer(view.text):
         value = DIGIT_WORD_PATTERN.sub(lambda m: DIGIT_WORDS[m.group().lower()], match.group())
